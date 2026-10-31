@@ -31,10 +31,11 @@ const wideWidth = 100
 // app is the root model: routing between views, layout, the status line,
 // modals, loading and the mutation runner.
 type app struct {
-	ctx  context.Context
-	svc  service
-	opts Options
-	wg   *sync.WaitGroup // mutations in flight; Run waits for them
+	ctx       context.Context
+	svc       service
+	opts      Options
+	running   *running   // mutations in flight; Run waits for them
+	checkouts *checkouts // of browsed sources; Run closes those left
 
 	width, height int
 	th            theme
@@ -80,22 +81,23 @@ type snapshot struct {
 
 func newApp(ctx context.Context, svc service, opts Options) *app {
 	a := &app{
-		ctx:   ctx,
-		svc:   svc,
-		opts:  opts,
-		wg:    &sync.WaitGroup{},
-		help:  help.New(),
-		spin:  spinner.New(spinner.WithSpinner(spinner.MiniDot)),
-		keys:  newSkillsKeys(),
-		fkeys: newFilterKeys(),
-		rkeys: newReaderKeys(),
-		nkeys: newFindKeys(),
-		view:  opts.View,
-		scope: opts.Scope,
-		busy:  map[string]bool{},
-		sk:    newSkillsState(),
-		fd:    newFindState(),
-		pv:    newPreviewer(),
+		ctx:       ctx,
+		svc:       svc,
+		opts:      opts,
+		running:   &running{},
+		checkouts: &checkouts{open: map[*core.Fetched]bool{}},
+		help:      help.New(),
+		spin:      spinner.New(spinner.WithSpinner(spinner.MiniDot)),
+		keys:      newSkillsKeys(),
+		fkeys:     newFilterKeys(),
+		rkeys:     newReaderKeys(),
+		nkeys:     newFindKeys(),
+		view:      opts.View,
+		scope:     opts.Scope,
+		busy:      map[string]bool{},
+		sk:        newSkillsState(),
+		fd:        newFindState(),
+		pv:        newPreviewer(),
 	}
 	if opts.Project == nil {
 		a.scope = core.Global
@@ -124,17 +126,12 @@ func (a *app) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// shutdown waits for mutations in flight and releases the checkouts: the
-// browsed one, and those left for installs whose results were never handled.
-// Run calls it after the program exits and the context is cancelled.
+// shutdown waits for mutations in flight, which may install from a checkout,
+// then closes the checkouts still open. Run calls it after the program exits
+// and the context is cancelled.
 func (a *app) shutdown() {
-	a.wg.Wait()
-	if a.fd.fetched != nil {
-		_ = a.fd.fetched.Close()
-	}
-	for f := range a.fd.installs {
-		_ = f.Close()
-	}
+	a.running.stop()
+	a.checkouts.closeAll()
 }
 
 func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -397,12 +394,40 @@ func (a *app) start(m mutation, force bool) tea.Cmd {
 		return nil
 	}
 	a.busy[m.key] = true
-	wg := a.wg
-	wg.Add(1)
+	run := a.running
 	return func() tea.Msg {
-		defer wg.Done()
+		if !run.begin() {
+			return nil
+		}
+		defer run.wg.Done()
 		return doneMsg{m: m, force: force, out: m.run(force)}
 	}
+}
+
+// running counts the mutations in flight. Once stopped, it lets none start:
+// a command that the program dropped when it quit, or ran too late, does
+// nothing, and Run never waits for it.
+type running struct {
+	mu      sync.Mutex
+	wg      sync.WaitGroup
+	stopped bool
+}
+
+func (r *running) begin() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.stopped {
+		r.wg.Add(1)
+	}
+	return !r.stopped
+}
+
+// stop waits for the mutations in flight.
+func (r *running) stop() {
+	r.mu.Lock()
+	r.stopped = true
+	r.mu.Unlock()
+	r.wg.Wait()
 }
 
 func (a *app) finish(msg doneMsg) tea.Cmd {
@@ -523,8 +548,10 @@ func (a *app) layout() layout {
 	return l
 }
 
+// View renders the frame. The frame shows names and paths from disk, config
+// and skills.sh, so only its styling survives as escape sequences.
 func (a *app) View() tea.View {
-	v := tea.NewView(a.render())
+	v := tea.NewView(sanitize.Styled(a.render()))
 	v.AltScreen = true
 	v.WindowTitle = "myskills"
 	return v

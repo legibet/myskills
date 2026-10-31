@@ -192,8 +192,10 @@ func (p *picker) sync() tea.Cmd {
 	return cmd
 }
 
+// View renders the frame, keeping only its styling as escape sequences, like
+// the app's.
 func (p *picker) View() tea.View {
-	v := tea.NewView(p.render())
+	v := tea.NewView(sanitize.Styled(p.render()))
 	v.AltScreen = true
 	v.WindowTitle = "myskills add"
 	return v

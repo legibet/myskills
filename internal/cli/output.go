@@ -232,7 +232,8 @@ func (a *app) printResult(scope core.Scope, res core.Result) {
 }
 
 // progress is a spinner with a message on stderr. It does nothing when
-// stderr is not a terminal.
+// stderr is not a terminal. The message may name a source, so it is printed
+// sanitized, on one line.
 type progress struct {
 	w    io.Writer
 	mu   sync.Mutex
@@ -259,7 +260,7 @@ func (p *progress) loop() {
 	defer tick.Stop()
 	for i := 0; ; i++ {
 		p.mu.Lock()
-		_, _ = fmt.Fprintf(p.w, "\r\x1b[K%c %s", frames[i%len(frames)], p.msg)
+		_, _ = fmt.Fprintf(p.w, "\r\x1b[K%c %s", frames[i%len(frames)], sanitize.Line(p.msg))
 		p.mu.Unlock()
 		select {
 		case <-p.stop:

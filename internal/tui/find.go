@@ -8,6 +8,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -290,7 +291,7 @@ func (a *app) updateFind(msg tea.Msg) tea.Cmd {
 	case fetchMsg:
 		if msg.seq != a.fd.fetchSeq {
 			if msg.f != nil {
-				return closeFetched(msg.f)
+				return a.closeFetched(msg.f)
 			}
 			return nil
 		}
@@ -376,14 +377,18 @@ func (a *app) browse(src string) tea.Cmd {
 	ctx, cancel := context.WithCancel(a.ctx)
 	a.fd.fetchCancel = cancel
 	a.fd.fetching, a.fd.fetchErr = true, nil
-	seq, svc := a.fd.fetchSeq, a.svc
+	seq, svc, co := a.fd.fetchSeq, a.svc, a.checkouts
 	return func() tea.Msg {
 		f, err := svc.Fetch(ctx, spec)
-		if err == nil && ctx.Err() != nil {
-			_ = f.Close()
+		if err != nil {
+			return fetchMsg{seq: seq, err: err}
+		}
+		co.add(f)
+		if ctx.Err() != nil { // left, or quit, while it was fetched
+			co.close(f)
 			return nil
 		}
-		return fetchMsg{seq: seq, f: f, err: err}
+		return fetchMsg{seq: seq, f: f}
 	}
 }
 
@@ -399,16 +404,55 @@ func (a *app) leaveBrowse() tea.Cmd {
 	a.fd.fetched, a.fd.fetching, a.fd.fetchErr = nil, false, nil
 	a.fd.list = listCursor{}
 	if f != nil && a.fd.installs[f] == 0 {
-		return closeFetched(f)
+		return a.closeFetched(f)
 	}
 	return nil
 }
 
-func closeFetched(f *core.Fetched) tea.Cmd {
+// closeFetched closes a checkout off the UI goroutine.
+func (a *app) closeFetched(f *core.Fetched) tea.Cmd {
+	co := a.checkouts
 	return func() tea.Msg {
-		_ = f.Close()
+		co.close(f)
 		return nil
 	}
+}
+
+// checkouts tracks the checkouts of browsed sources from the moment Fetch
+// returns until they are closed, so that shutdown closes those whose fetch
+// result or close command never ran.
+type checkouts struct {
+	mu     sync.Mutex
+	open   map[*core.Fetched]bool
+	closed bool // shutdown has run: checkouts fetched later are closed at once
+}
+
+func (c *checkouts) add(f *core.Fetched) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.closed {
+		_ = f.Close()
+		return
+	}
+	c.open[f] = true
+}
+
+func (c *checkouts) close(f *core.Fetched) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.open, f)
+	_ = f.Close()
+}
+
+// closeAll closes every open checkout, and those added after.
+func (c *checkouts) closeAll() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.closed = true
+	for f := range c.open {
+		_ = f.Close()
+	}
+	clear(c.open)
 }
 
 // addResult adds a skills.sh result to the library through git.
@@ -452,7 +496,7 @@ func (a *app) installCandidate(c core.Candidate, key string) tea.Cmd {
 		}
 		a.installed(key, out)
 		if a.fd.fetched != f && a.fd.installs[f] == 0 {
-			return closeFetched(f)
+			return a.closeFetched(f)
 		}
 		return nil
 	}}, false)

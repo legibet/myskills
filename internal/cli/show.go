@@ -117,6 +117,11 @@ func (a *app) pathCmd() *cobra.Command {
 			if err != nil {
 				return a.refError(args[0], err)
 			}
+			// Scripts get the exact path; a terminal gets it made safe.
+			if a.outTTY {
+				a.println(sanitize.Line(sk.Dir))
+				return nil
+			}
 			_, err = fmt.Fprintln(a.rawOut, sk.Dir)
 			return err
 		},

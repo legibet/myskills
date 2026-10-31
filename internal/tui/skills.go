@@ -580,12 +580,12 @@ func (a *app) defaultsModal() {
 	for i, ag := range a.data.agents {
 		var dirs []string
 		if ag.Project != "" {
-			dirs = append(dirs, ag.Project)
+			dirs = append(dirs, sanitize.Line(ag.Project))
 		}
 		if d, ok := ag.GlobalDir(); ok {
 			dirs = append(dirs, tildePath(d))
 		}
-		items[i] = checkItem{label: ag.Name, detail: strings.Join(dirs, " · "), checked: slices.Contains(current, ag.ID)}
+		items[i] = checkItem{label: sanitize.Line(ag.Name), detail: strings.Join(dirs, " · "), checked: slices.Contains(current, ag.ID)}
 	}
 	agents, svc := a.data.agents, a.svc
 	a.modal = checklistModal("Default agents",
@@ -679,63 +679,60 @@ func (a *app) removeModal() {
 }
 
 // updateSkill is u: install an available upstream update of the skill, then
-// refresh its outdated copies in the project and global scopes.
+// refresh its outdated copies in the project and global scopes. The library
+// and the copies are separate mutations, so that discarding the local changes
+// of one forces only that one.
 func (a *app) updateSkill() tea.Cmd {
 	r, _ := a.current()
 	sk := *r.skill
 	svc, ctx, scopes, names, name := a.svc, a.ctx, a.scopes(), a.agentNames(), sanitize.Line(sk.Name)
 	var discard []string
-	if sk.Modified && sk.Updatable() {
-		discard = append(discard, "Your changes to "+name+" in the library are replaced by the update.")
-	}
 	for _, sc := range scopes {
 		if t := a.discardText(sk.Path, sc); t != "" {
 			discard = append(discard, t)
 		}
 	}
-	m := mutation{key: sk.Path, discard: strings.Join(discard, "\n\n"), run: func(force bool) outcome {
-		// Read the skill afresh: a retry after a discard confirmation must see
-		// the update a previous run already applied, and only refresh copies.
-		lib, err := svc.Library()
-		if err != nil {
-			return outcome{err: err}
-		}
-		i := slices.IndexFunc(lib, func(s core.Skill) bool { return s.Path == sk.Path })
-		if i < 0 {
-			return outcome{err: fmt.Errorf("%s is no longer in the library", name)}
-		}
-		sk := lib[i]
-		var out outcome
-		if sk.Updatable() {
-			out = applyUpdate(ctx, svc, sk, force)
-			if out.err != nil {
-				return out
+	// copies refreshes the copies once the library is current; lib is what
+	// updating the library did.
+	copies := func(lib outcome) mutation {
+		return mutation{key: sk.Path, discard: strings.Join(discard, "\n\n"), run: func(force bool) outcome {
+			var out outcome
+			for _, sc := range scopes {
+				res, err := svc.RefreshCopies(sc, []string{sk.Path}, force)
+				for _, r := range res {
+					out.merge(describe(r, nil, "Refreshed the copies of %s", sk.Name, sc, names))
+				}
+				if err != nil {
+					out.err = err
+					return out
+				}
 			}
-		}
-		for _, sc := range scopes {
-			res, err := svc.RefreshCopies(sc, []string{sk.Path}, force)
-			for _, r := range res {
-				out.merge(describe(r, nil, "Refreshed the copies of %s", sk.Name, sc, names))
+			if len(lib.lines)+len(lib.warnings)+len(out.lines)+len(out.warnings) == 0 {
+				out.note = name + " is up to date"
 			}
-			if err != nil {
-				out.err = err
-				return out
-			}
-		}
-		if len(out.lines) == 0 && len(out.warnings) == 0 && out.note == "" {
-			out.note = name + " is up to date"
-		}
-		return out
+			return out
+		}}
+	}
+	if !sk.Updatable() {
+		return a.start(copies(outcome{}), false)
+	}
+	m := mutation{key: sk.Path, run: func(force bool) outcome {
+		return applyUpdate(ctx, svc, sk, force)
 	}, done: func(out outcome) tea.Cmd {
-		if out.err == nil {
-			delete(a.sk.updates, sk.Path)
-		}
 		a.pv.invalidate(dirDoc(sk.Dir).key)
-		return nil
+		if out.err != nil {
+			return nil
+		}
+		delete(a.sk.updates, sk.Path)
+		return a.start(copies(out), false)
 	}}
+	if sk.Modified {
+		m.discard = "Your changes to " + name + " in the library are replaced by the update."
+	}
 	return a.start(m, false)
 }
 
+// applyUpdate checks the skill and installs its update, if any.
 func applyUpdate(ctx context.Context, svc service, sk core.Skill, force bool) outcome {
 	name := sanitize.Line(sk.Name)
 	u, err := svc.CheckUpdates(ctx, []core.Skill{sk}, nil)
@@ -765,8 +762,6 @@ func applyUpdate(ctx context.Context, svc service, sk core.Skill, force bool) ou
 		out.warnings = append(out.warnings, name+" was removed upstream; the library keeps its copy")
 	case core.CheckFailed:
 		out.err = check.Err
-	default:
-		out.note = name + " is up to date"
 	}
 	return out
 }
@@ -904,11 +899,12 @@ func (a *app) agentNames() map[string]string {
 	return names
 }
 
+// namesOf returns the display names of agent ids, each on one line.
 func (a *app) namesOf(ids []string) []string {
 	names := a.agentNames()
 	out := make([]string, 0, len(ids))
 	for _, id := range ids {
-		out = append(out, cmp.Or(names[id], id))
+		out = append(out, sanitize.Line(cmp.Or(names[id], id)))
 	}
 	return out
 }
@@ -960,10 +956,10 @@ func (a *app) placeLabel(p core.Placement) string {
 }
 
 // pathLabel shows path relative to the project root when it lies inside it,
-// and with "~" otherwise.
+// and with "~" otherwise, on one line.
 func pathLabel(root, path string) string {
 	if rel, err := filepath.Rel(root, path); err == nil && root != "" && !strings.HasPrefix(rel, "..") {
-		return filepath.ToSlash(rel)
+		return sanitize.Line(filepath.ToSlash(rel))
 	}
 	return tildePath(path)
 }
@@ -1016,7 +1012,7 @@ func (a *app) outdatedCopies(skillPath string) []core.Placement {
 func scopeList(scopes []core.Scope) string {
 	labels := make([]string, len(scopes))
 	for i, sc := range scopes {
-		labels[i] = sc.String()
+		labels[i] = sanitize.Line(sc.String())
 	}
 	return strings.Join(labels, ", ")
 }

@@ -316,20 +316,49 @@ func TestShutdownClosesCheckoutsOfUnfinishedInstalls(t *testing.T) {
 		t.Fatalf("the checkout went while an install used it: %v", err)
 	}
 	// The program quits before the install's result is handled.
-	var drain func(tea.Cmd)
-	drain = func(c tea.Cmd) {
-		if c == nil {
-			return
-		}
-		if b, ok := c().(tea.BatchMsg); ok {
-			for _, c := range b {
-				drain(c)
-			}
-		}
-	}
 	drain(install)
 	h.a.shutdown()
 	if _, err := os.Stat(checkout.Root); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("checkout left behind: %v", err)
+	}
+}
+
+func TestShutdownClosesCheckoutsOfDroppedFetches(t *testing.T) {
+	// The program quits before the fetch result is handled.
+	input, checkout := realCheckout(t)
+	f := libraryFixture()
+	f.fetched[input] = checkout
+	h := findHarness(t, f)
+	h.typeText(input)
+	_, fetch := h.a.Update(keyPress("enter"))
+	drain(fetch)
+	h.a.shutdown()
+	if _, err := os.Stat(checkout.Root); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("checkout left behind: %v", err)
+	}
+
+	// The fetch finishes only after shutdown.
+	input, checkout = realCheckout(t)
+	f.fetched[input] = checkout
+	h = findHarness(t, f)
+	h.typeText(input)
+	_, fetch = h.a.Update(keyPress("enter"))
+	h.a.shutdown()
+	drain(fetch)
+	if _, err := os.Stat(checkout.Root); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("checkout left behind: %v", err)
+	}
+}
+
+// drain runs cmd and the commands it batches, and drops their messages, as
+// when the program has quit.
+func drain(cmd tea.Cmd) {
+	if cmd == nil {
+		return
+	}
+	if b, ok := cmd().(tea.BatchMsg); ok {
+		for _, c := range b {
+			drain(c)
+		}
 	}
 }

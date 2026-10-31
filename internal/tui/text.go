@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/legibet/myskills/internal/sanitize"
 )
 
 // compactCount formats an install count like 999, 12.3K or 1.2M.
@@ -33,19 +35,19 @@ func plural(n int, one, many string) string {
 	return fmt.Sprintf("%d %s", n, many)
 }
 
-// tildePath shortens a path under the home directory to "~/…".
+// tildePath shortens a path under the home directory to "~/…", on one line.
 func tildePath(p string) string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
-		return p
+		return sanitize.Line(p)
 	}
 	if p == home {
 		return "~"
 	}
 	if rel, ok := strings.CutPrefix(p, home+string(filepath.Separator)); ok {
-		return "~/" + filepath.ToSlash(rel)
+		return "~/" + sanitize.Line(filepath.ToSlash(rel))
 	}
-	return p
+	return sanitize.Line(p)
 }
 
 // truncate shortens plain text to w cells with an ellipsis.

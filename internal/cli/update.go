@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -165,10 +166,9 @@ func (a *app) update(ctx context.Context, refs []string, force bool) error {
 	}
 	defer func() { _ = u.Close() }()
 
+	// One skill at a time, so that an interrupt stops between them.
 	quiet, skipped := true, false
-	commits := map[string]string{}
 	for _, c := range u.Checks {
-		commits[c.Skill.Path] = c.Commit
 		switch c.State {
 		case core.CheckFailed, core.RemovedUpstream:
 			quiet = false
@@ -176,18 +176,22 @@ func (a *app) update(ctx context.Context, refs []string, force bool) error {
 		case core.NotUpdatable:
 			quiet = false
 			a.note(c.Skill.Path + " has no source to update from")
-		}
-	}
-	for _, r := range svc.ApplyUpdates(u, nil, force) {
-		quiet = false
-		switch {
-		case errors.Is(r.Err, core.ErrModified):
-			skipped = true
-			a.warn(r.Err.Error())
-		case r.Err != nil:
-			a.fail(r.Err.Error())
-		default:
-			a.ok("updated " + r.Skill + dim(shortCommit(commits[r.Skill])))
+		case core.Available:
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			quiet = false
+			for _, r := range svc.ApplyUpdates(u, []string{c.Skill.Path}, force) {
+				switch {
+				case errors.Is(r.Err, core.ErrModified):
+					skipped = true
+					a.warn(r.Err.Error())
+				case r.Err != nil:
+					a.fail(r.Err.Error())
+				default:
+					a.ok("updated " + r.Skill + dim(shortCommit(c.Commit)))
+				}
+			}
 		}
 	}
 
@@ -203,6 +207,9 @@ func (a *app) update(ctx context.Context, refs []string, force bool) error {
 		scopes = []core.Scope{*project, core.Global}
 	}
 	for _, sc := range scopes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		results, err := svc.RefreshCopies(sc, paths, force)
 		for _, res := range results {
 			quiet = false
@@ -243,8 +250,8 @@ func leafErrors(err error) []error {
 	return out
 }
 
-// selectSkills resolves refs, or returns the whole library (only updatable
-// skills when updatable is set).
+// selectSkills resolves refs, each skill once, or returns the whole library
+// (only updatable skills when updatable is set).
 func (a *app) selectSkills(svc *core.Service, refs []string, updatable bool) ([]core.Skill, error) {
 	if len(refs) == 0 {
 		lib, err := svc.Library()
@@ -265,7 +272,9 @@ func (a *app) selectSkills(svc *core.Service, refs []string, updatable bool) ([]
 		if err != nil {
 			return nil, a.refError(ref, err)
 		}
-		skills = append(skills, sk)
+		if !slices.ContainsFunc(skills, func(s core.Skill) bool { return s.Path == sk.Path }) {
+			skills = append(skills, sk)
+		}
 	}
 	return skills, nil
 }

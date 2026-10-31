@@ -300,7 +300,7 @@ myskills find [query]            TTY: TUI Find view. Non-TTY: results (`--json`)
 myskills add <source>            §5
 myskills list | ls               library: name, library path, source, where enabled, issues (--json)
 myskills show <skill>            metadata + rendered SKILL.md
-myskills path <skill>            absolute library path
+myskills path <skill>            absolute library path (exact bytes when piped)
 myskills remove | rm <skill>…    remove owning entries; disables their link placements in all
                                  known scopes; copies stay as unmanaged files (records dropped).
                                  Confirms in TTY; non-TTY requires -y.
@@ -327,8 +327,9 @@ myskills --version
   of a skill that is not enabled) keep exit 0.
 - Untrusted text (skill metadata and markdown, skills.sh results, entry names found on disk,
   errors quoting them) never reaches the terminal as escape sequences: every printed line,
-  and rendered markdown after Glamour (which decodes entities like `&#27;`), keeps only SGR
-  styling. JSON output is unchanged data.
+  spinner message and rendered markdown after Glamour (which decodes entities like `&#27;`)
+  keeps only SGR styling. JSON output, and `path` when stdout is not a terminal, are
+  unchanged data.
 - Ctrl-C cancels network work and a pending prompt, and stops before the next item of a
   multi-item command; a second Ctrl-C exits immediately.
 
@@ -365,8 +366,9 @@ Skills view
 - `a`: per-skill agent checklist for the active scope (toggle placements per agent). Agents
   sharing a skill directory are one item, since they share its placement.
 - `A`: default agents preference (writes config).
-- `r`: check updates (async; header spinner). `u`: update the highlighted skill (library
-  update and/or copy refresh).
+- `r`: check updates (async; header spinner). `u`: update the highlighted skill: the library
+  update, then the copy refresh. Each asks before discarding its own local changes, and
+  confirming forces only that step.
 - `x`: remove from library (modal confirm). `e`: edit SKILL.md in `$VISUAL`/`$EDITOR`.
 - `/`: fuzzy filter; `tab`/`shift+tab` cycle All/Enabled/Issues. Issues lists invalid skills,
   broken and conflicting placements, modified copies, and unmanaged (`other`) entries; `space`
@@ -392,7 +394,10 @@ Add picker (`myskills add <source>` with several candidates): checklist + previe
 Behavior rules
 - Mutations run as commands; while one runs for a skill, its keys are ignored (no duplicate
   work). Network requests are cancellable and never block input.
-- Untrusted text is sanitized as in §8 (`internal/sanitize`); rendered previews keep only SGR.
+- Untrusted text is sanitized as in §8 (`internal/sanitize`): names and paths show on one
+  line, and every frame of the app and the add picker keeps only SGR.
+- Quitting waits for the mutations in flight; one whose command never ran is dropped, and
+  checkouts of browsed sources are removed.
 - One palette with light/dark variants chosen from the terminal background, one accent color,
   muted secondary text, semantic success/warning/error. No Nerd Font glyphs.
 - Help bar from `bubbles/help`; `?` shows full help.

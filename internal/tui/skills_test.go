@@ -2,13 +2,17 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/legibet/myskills/internal/agent"
 	"github.com/legibet/myskills/internal/core"
+	"github.com/legibet/myskills/internal/source"
 )
 
 func rowNames(a *app) []string {
@@ -115,6 +119,28 @@ func TestToggleEnablesOffSkillAsLink(t *testing.T) {
 	h.contains("✓ Enabled review (link) in Universal, Claude Code")
 	if !slices.Contains(h.a.summary, "✓ Enabled review (link) in Universal, Claude Code") {
 		t.Fatalf("summary = %v", h.a.summary)
+	}
+}
+
+func TestShutdownSkipsMutationsTheProgramDropped(t *testing.T) {
+	h := newHarness(t, libraryFixture(), projectOptions(), 120, 30)
+	h.cursorTo("review")
+	_, cmd := h.a.Update(keyPress("space"))
+	// The program quits before running the command: shutdown must not wait
+	// for it, and running it afterwards changes nothing.
+	done := make(chan struct{})
+	go func() {
+		h.a.shutdown()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("shutdown waits for a mutation that never started")
+	}
+	drain(cmd)
+	if got := h.svc.called("Enable"); len(got) != 0 {
+		t.Fatalf("calls = %v", got)
 	}
 }
 
@@ -562,24 +588,87 @@ func TestUpdateRetryRedoesOnlyTheFailedPhase(t *testing.T) {
 	f.checks = []core.UpdateCheck{{Skill: f.lib[3], State: core.Available}}
 	f.failNext("RefreshCopies", fmt.Errorf("%w: .agents/skills/tdd has local changes", core.ErrModified))
 	h := newHarness(t, f, projectOptions(), 120, 30)
+	h.a.sk.updates["tdd"] = f.checks[0]
 	h.cursorTo("tdd")
 	h.press("u")
-	h.contains("Discard local changes?")
+	h.contains("Discard local changes?", ".agents/skills/tdd has local changes")
+	h.lacks("in the library are replaced")
+	if _, ok := h.a.sk.updates["tdd"]; ok {
+		t.Fatal("the update badge should clear once the library is updated")
+	}
+
+	// Meanwhile a newer version appears upstream and the library gets local
+	// changes: discarding the copy's changes must not replace them.
+	f.mu.Lock()
+	f.lib[3].Modified = true
+	f.checks = []core.UpdateCheck{{Skill: f.lib[3], State: core.Available}}
+	f.mu.Unlock()
 	h.press("y")
 	want := []string{
 		"CheckUpdates [tdd]",
 		"ApplyUpdates [tdd] force=false",
 		"RefreshCopies /work/proj [tdd] force=false",
-		// The retry sees the updated record: nothing left to update.
-		"CheckUpdates [tdd]",
 		"RefreshCopies /work/proj [tdd] force=true",
 		"RefreshCopies global [tdd] force=true",
 	}
-	if got := f.calls; !slices.Equal(got, want) {
+	if got := f.called(""); !slices.Equal(got, want) {
 		t.Fatalf("calls = %v, want %v", got, want)
 	}
-	h.lacks("changed since it was checked")
+	h.contains("✓ Updated tdd")
+	h.lacks("is up to date")
 	if !slices.Contains(h.a.summary, "✓ Updated tdd") {
 		t.Fatalf("summary = %v", h.a.summary)
+	}
+}
+
+func TestViewKeepsOnlySGR(t *testing.T) {
+	sgr := regexp.MustCompile("\x1b\\[[0-9;:]*m")
+	check := func(content string, visible ...string) {
+		t.Helper()
+		if rest := sgr.ReplaceAllString(content, ""); strings.ContainsAny(rest, "\x1b\x07") || strings.Contains(rest, "pwned") {
+			t.Errorf("view holds escapes other than SGR: %q", rest)
+		}
+		for _, v := range visible {
+			if !strings.Contains(stripView(content), v) {
+				t.Errorf("view lacks %q:\n%s", v, stripView(content))
+			}
+		}
+	}
+
+	// An entry found on disk with a DCS and an OSC in its name and path, for
+	// an agent whose configured name holds an OSC.
+	f := libraryFixture()
+	f.agents = append(f.agents, agent.Agent{ID: "rogue", Name: "Ro\x1b]0;pwned\x07gue"})
+	st := f.status[project]
+	st.Others = append(st.Others, core.Placement{
+		Path:   "/work/proj/.claude/skills/ev\x1bPq#0;2\x1b\\il\x1b]8;;https://pwned\x07",
+		Name:   "ev\x1bP1$rpwned\x1b\\il\x1b]0;pwned\x07",
+		Agents: []string{"claude-code", "rogue"},
+		Kind:   core.KindOther,
+	})
+	f.status[project] = st
+	h := newHarness(t, f, projectOptions(), 120, 30)
+	h.press("tab", "tab")
+	h.cursorTo(st.Others[1].Name)
+	check(h.a.View().Content, "◇ evil", ".claude/skills/evil", "Claude Code, Rogue")
+
+	// The add picker, for a local folder with escapes in its path.
+	p := newPicker(&core.Fetched{
+		Spec:       source.Spec{Kind: source.Local, Path: "/src/ev\x1bP1$rpwned\x1b\\il\x1b]0;pwned\x07"},
+		Candidates: []core.Candidate{{Name: "one", Dir: "/src/one"}},
+	})
+	drivePicker(p)
+	check(p.View().Content, "Add from /src/evil")
+}
+
+func TestUpdateReportsUpToDateOnlyWhenNothingChanged(t *testing.T) {
+	f := libraryFixture()
+	f.checks = []core.UpdateCheck{{Skill: f.lib[3], State: core.UpToDate}}
+	h := newHarness(t, f, projectOptions(), 120, 30)
+	h.cursorTo("tdd")
+	h.press("u")
+	h.contains("tdd is up to date")
+	if got := f.called("ApplyUpdates"); len(got) != 0 {
+		t.Fatalf("calls = %v", got)
 	}
 }

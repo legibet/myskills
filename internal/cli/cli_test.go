@@ -692,6 +692,98 @@ func TestUpdateSkipsModifiedCopy(t *testing.T) {
 	contains(t, r.out, "✓ refreshed tdd → .agents/skills/tdd (Universal, Antigravity)")
 }
 
+// cancelWriter cancels a context once text is written, like a Ctrl-C right
+// after that text is printed.
+type cancelWriter struct {
+	buf    bytes.Buffer
+	text   string
+	cancel context.CancelFunc
+}
+
+func (w *cancelWriter) Write(p []byte) (int, error) {
+	n, err := w.buf.Write(p)
+	if bytes.Contains(w.buf.Bytes(), []byte(w.text)) {
+		w.cancel()
+	}
+	return n, err
+}
+
+func TestUpdateInterrupted(t *testing.T) {
+	e := newEnv(t)
+	src, url := e.repo(map[string]string{"tdd": "tdd", "lint": "lint"})
+	e.ok(e.home, "add", url, "--all")
+	proj := e.project()
+	e.ok(proj, "enable", "tdd", "--copy", "-a", "universal")
+	writeSkill(t, filepath.Join(src, "tdd"), "tdd", "new body")
+	writeSkill(t, filepath.Join(src, "lint"), "lint", "new body")
+	commitAll(t, src)
+
+	interrupt := func(after string, args ...string) result {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		out := &cancelWriter{text: after, cancel: cancel}
+		var errOut bytes.Buffer
+		t.Chdir(proj)
+		code := run(ctx, args, streams{in: strings.NewReader(""), out: out, err: &errOut}, core.Open)
+		return result{code: code, out: out.buf.String(), err: errOut.String()}
+	}
+	unchanged := func(p string) {
+		t.Helper()
+		if body, err := os.ReadFile(p); err != nil || strings.Contains(string(body), "new body") {
+			t.Errorf("%s changed after the interrupt: %v", p, err)
+		}
+	}
+
+	// Interrupted between two library skills.
+	r := interrupt("✓ updated tdd", "update", "tdd", "lint")
+	if r.code != 1 {
+		t.Fatalf("exit %d\nstdout:\n%s\nstderr:\n%s", r.code, r.out, r.err)
+	}
+	contains(t, r.err, "✗ interrupted")
+	unchanged(filepath.Join(e.libDir("lint"), "SKILL.md"))
+
+	// Interrupted before the copies are refreshed.
+	r = interrupt("✓ updated lint", "update")
+	if r.code != 1 {
+		t.Fatalf("exit %d\nstdout:\n%s\nstderr:\n%s", r.code, r.out, r.err)
+	}
+	contains(t, r.err, "✗ interrupted")
+	unchanged(filepath.Join(proj, ".agents/skills/tdd/SKILL.md"))
+}
+
+func TestPathOnTerminalIsSanitized(t *testing.T) {
+	e := newEnv(t)
+	lib := filepath.Join(e.home, "my\x1b]0;pwned\x07skills")
+	t.Setenv("MYSKILLS_HOME", lib)
+	writeSkill(t, e.path("tdd"), "tdd", "body")
+	e.ok(e.home, "add", e.path("tdd"))
+
+	// Scripts get the exact path.
+	r := e.ok(e.home, "path", "tdd")
+	if want := filepath.Join(lib, "skills", "tdd") + "\n"; r.out != want {
+		t.Errorf("path = %q, want %q", r.out, want)
+	}
+
+	var out, errOut bytes.Buffer
+	s := streams{in: strings.NewReader(""), out: &out, err: &errOut, interactive: true, outTTY: true}
+	if code := run(context.Background(), []string{"path", "tdd"}, s, core.Open); code != 0 {
+		t.Fatalf("exit %d: %s", code, errOut.String())
+	}
+	if want := filepath.Join(e.home, "myskills", "skills", "tdd") + "\n"; out.String() != want {
+		t.Errorf("path on a terminal = %q, want %q", out.String(), want)
+	}
+}
+
+func TestProgressIsSanitized(t *testing.T) {
+	var errOut bytes.Buffer
+	a := &app{rawErr: &errOut, errTTY: true}
+	a.progress("Fetching ev\x1b]0;pwned\x07il\x1bP1$r\x1b\\\nrepo…").end()
+	contains(t, errOut.String(), "Fetching evil repo…")
+	if s := errOut.String(); strings.ContainsAny(s, "\a\n") || strings.Contains(s, "pwned") || strings.Contains(s, "\x1bP") {
+		t.Errorf("progress line holds escapes or newlines: %q", s)
+	}
+}
+
 func TestAgents(t *testing.T) {
 	e := newEnv(t)
 	r := e.ok(e.home, "agents")
