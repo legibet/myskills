@@ -1,36 +1,17 @@
 # AGENTS.md
 
-## Project
+myskills is a Go CLI + TUI that manages agent skills: a private library at `~/.myskills/skills`, from which skills are enabled per project or globally as links (personal, git-excluded) or copies (committed with the project). Linux and macOS are first-class; Windows is best effort.
 
-MySkills is a native macOS SwiftUI app for managing agent skills.
-
-- Private skill library: `~/.myskills/skills`
-- Skills are installed/imported into MySkills first, then enabled by symlink to global or project agent paths.
-- Main screens: `Library`, `Discover`, `Enabled`, `Skill Reader`, `Settings`.
-- `Discover` uses skills.sh API.
-- Package type: SwiftPM executable macOS app.
-- Dependency: `MarkdownUI` for rendering `SKILL.md`.
+`docs/design.md` is the source of truth for behavior: data formats, command semantics, TUI keys and edge cases. Read the relevant section before changing behavior, and update it in the same change when behavior changes.
 
 ## Commands
 
-- Build: `swift build`
-- Create signed app bundle: `make sign`
-- Run app: `make run`
-- Verify launch: `make verify`
-- Clean build outputs: `make clean`
+- Build: `make build` (binary `./myskills`)
+- Test: `make test` (`go test -race ./...`)
+- Lint: `make lint` (`go vet` + `golangci-lint`, gofumpt/goimports formatting)
 
-## File Map
+## Code
 
-- `Sources/MySkillsApp/MySkillsApp.swift`: app entry, windows, settings scene.
-- `Sources/MySkillsApp/ContentView.swift`: sidebar and top-level navigation.
-- `Sources/MySkillsApp/AppStore.swift`: app state and user actions.
-- `Sources/MySkillsApp/Models.swift`: records, enums, URL formatting.
-- `Sources/MySkillsApp/Services.swift`: filesystem, skills.sh API, Git import, symlinks, process helpers.
-- `Sources/MySkillsApp/LibraryViews.swift`: installed skills list, details, enable sheet.
-- `Sources/MySkillsApp/DiscoverView.swift`: search and Git repository browsing.
-- `Sources/MySkillsApp/EnabledViews.swift`: global and project enablements.
-- `Sources/MySkillsApp/SkillReaderView.swift`: rendered `SKILL.md` reader window.
-- `Sources/MySkillsApp/SettingsView.swift`: folder open preferences.
-- `Sources/MySkillsApp/SharedViews.swift`: shared small views.
-- `Resources/Info.plist`: app bundle metadata copied by `make sign`.
-- `Resources/AppIcon.icon`: Icon Composer app icon, compiled by `actool` during `make sign`.
+- Packages under `internal/` split by responsibility; `core` is the only domain API, and `cli`/`tui` are thin frontends over it.
+- Tests isolate state with temp `HOME` and `MYSKILLS_HOME`, and use local git repos over `file://` instead of the network.
+- New files under `~/.myskills` never reuse the name `state.json`: the archived macOS app (tag `macos-app`) owns it.
