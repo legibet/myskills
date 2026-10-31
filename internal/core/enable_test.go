@@ -391,6 +391,11 @@ func TestParentSymlinkedAgentDirs(t *testing.T) {
 	if got := st.Enablements[0].Placements[0].Agents; !slices.Equal(got, []string{"universal", "claude-code", "antigravity"}) {
 		t.Errorf("agents = %v", got)
 	}
+	dirs, err := e.svc.AgentDirs(sc)
+	if err != nil || len(dirs) != 1 || dirs[0].Path != filepath.Join(sc.Root, ".agents", "skills") ||
+		!slices.Equal(dirs[0].Agents, []string{"universal", "claude-code", "antigravity"}) {
+		t.Errorf("AgentDirs = %+v, %v", dirs, err)
+	}
 	want := excludeBegin + "\n/.agents/skills/alpha\n" + excludeEnd + "\n"
 	if got := managedBlock(exclude(t, sc.Root)); got != want {
 		t.Errorf("exclude = %q", got)
@@ -446,6 +451,24 @@ func TestDisableBrokenByName(t *testing.T) {
 	}
 	_, err = e.svc.Disable(sc, "alpha", DisableOptions{})
 	wantErr(t, err, ErrNotFound)
+}
+
+func TestDisableBrokenByPathOverName(t *testing.T) {
+	e := setup(t)
+	sc := e.project("proj", false)
+	// pack/delta is named delta; the broken link points at the missing "delta".
+	writeSkill(t, e.libDir("pack/delta"), "delta", "body")
+	e.enable(sc, "pack/delta", EnableOptions{Mode: Copy, Agents: []string{"claude-code"}})
+	broken := filepath.Join(sc.Root, ".agents", "skills", "delta")
+	symlink(t, e.libDir("delta"), broken)
+
+	res, err := e.svc.Disable(sc, "delta", DisableOptions{})
+	if err != nil || len(res.Changes) != 1 || res.Changes[0].Path != broken {
+		t.Fatalf("disable = %+v, %v", res, err)
+	}
+	if !isRealDir(filepath.Join(sc.Root, ".claude", "skills", "delta")) {
+		t.Error("the copy of pack/delta was removed")
+	}
 }
 
 func TestEnableBrokenLinkOfAnotherSkill(t *testing.T) {

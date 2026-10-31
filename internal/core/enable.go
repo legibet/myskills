@@ -435,6 +435,13 @@ func (s *Service) Disable(sc Scope, ref string, opts DisableOptions) (Result, er
 			return err
 		}
 		sk, resolveErr := resolve(lib, ref)
+		// Like resolve, a path wins over a name: the missing library path of a
+		// broken link names that link even when a skill has that name.
+		if resolveErr == nil && sk.Path != ref && slices.ContainsFunc(placements, func(p Placement) bool {
+			return p.Kind == KindBroken && p.Skill == ref
+		}) {
+			resolveErr = errorf(ErrNotFound, "no skill %q in the library", ref)
+		}
 		var match func(Placement) bool
 		switch {
 		case resolveErr == nil:

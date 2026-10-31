@@ -88,7 +88,8 @@ The macOS app's `state.json` is never read or written.
     }
   },
   "copies": {
-    "/Users/me/proj/.agents/skills/tdd": { "skill": "tdd", "hash": "v1:…", "copiedAt": "…" }
+    "/Users/me/proj/.agents/skills/tdd": { "skill": "tdd", "hash": "v1:…", "libraryHash": "v1:…",
+                                           "copiedAt": "…" }
   },
   "projects": ["/Users/me/proj"]
 }
@@ -98,7 +99,9 @@ The macOS app's `state.json` is never read or written.
   entry). `source.path` is the skill dir inside the repo / the local skill dir itself.
 - `hash` = content hash of what was installed (the upstream content). Local modification =
   current hash ≠ recorded hash. `commit` = last upstream commit verified to have that content.
-- `copies` keyed by absolute placement path; `hash` = content at copy time.
+- `copies` keyed by absolute placement path; `hash` = content of the copy as written,
+  `libraryHash` = content of the library skill it was copied from. They differ when copying
+  normalizes symlinks, so each is compared with its own side (see §6 Scan).
 - `projects`: project roots where myskills placed something. Used for "where is this skill
   enabled" and agent cleanup. A root is dropped only when it exists and holds no managed
   placement (an unmounted root is kept).
@@ -153,8 +156,9 @@ Source spec:
 | `<remote>#<ref>` | branch or tag |
 | `./x`, `../x`, `/x`, `~/x`, `C:\x`, `\\server\x` | local folder (explicit path forms only) |
 
-Flags: `-s/--skill <name>` (repeatable), `--all`, `--ref <ref>`, `--link` (local only),
-`-y` (confirmation only; never implies `--all` or `--force`).
+Flags: `-s/--skill <name>` (repeatable), `--all`, `--ref <ref>`, `--link` (local only).
+`add` never asks for confirmation; `--all` adds the valid candidates and reports invalid ones
+as failed (exit 1).
 
 Remote fetch: `git clone --depth 1 --single-branch [--branch <ref>] <url> <tmp>`, then
 `git rev-parse HEAD`. Uses the user's git credentials; temp dirs always removed.
@@ -239,8 +243,12 @@ Dirs are deduplicated by resolved path (parent symlinks resolved, e.g. `.claude/
 - `--copy` on an existing unmodified copy whose library content changed → refresh.
 - Deleting a modified copy (current hash ≠ record) → `ErrModified` unless `--force`.
 - A placement path occupied by anything myskills doesn't manage → `ErrConflict` naming the
-  occupant (and its library path when it is a link to another library skill). `--force` never
-  overrides a conflict.
+  occupant (and its library path when it is a link to another library skill). A broken link
+  to the same library path is repaired; one to another library path is a conflict (disable it
+  by that path first). `--force` never overrides a conflict.
+- Every target is checked before anything changes. Right before each placement is swapped in,
+  it is checked again (still absent, the same link, or an unmodified copy), so an edit made
+  meanwhile fails the operation instead of being lost.
 
 ### Disable
 - Removes the skill's placements in the scope (all agents, or the `-a` ones), copy records,
@@ -253,8 +261,8 @@ Classify every entry of every known agent dir (built-in + custom) in the scope:
 - `link`: symlink whose literal target (absolute) lies under the library root (lexical check
   against the root path and its resolved path) and exists → library path.
 - `broken`: such a link whose target is missing.
-- `copy`: real dir recorded in `lock.copies`; flags `modified` (hash ≠ record),
-  `outdated` (record hash ≠ current library hash).
+- `copy`: real dir recorded in `lock.copies`; flags `modified` (current hash ≠ `hash`),
+  `outdated` (current library hash ≠ `libraryHash`).
 - `other`: anything else; shown, never touched.
 Per skill: placements, agents, mode (`link`/`copy`/`mixed`), `partial` when a default agent
 that supports the scope lacks a placement.
@@ -269,9 +277,11 @@ that supports the scope lacks a placement.
   record-less skills: not updatable. Parallelism 4. `--json` supported.
 - `update [skill…]`: run check; install updates from the same clone that was checked
   (stage, then swap: rename old → `.old-<rand>`, new → dest, remove old; restore on failure).
-  A locally modified library skill is skipped unless `--force`. Then refresh outdated,
-  unmodified copies of the selected skills in the current project (if any) and global scope.
-  Skips are reported; exit code 1 if anything was skipped or failed.
+  A locally modified library skill is skipped unless `--force`; so is a skill whose record
+  changed since the check (another process updated it), even with `--force`. Then refresh
+  outdated, unmodified copies of the selected skills (all library skills, updatable or not,
+  when none are named) in the current project (if any) and global scope. Skips are reported;
+  exit code 1 if anything was skipped or failed. "Removed upstream" is a warning.
 
 ## 8. Commands
 
@@ -301,7 +311,15 @@ myskills --version
 
 - `<skill>` = library path or name; an ambiguous name errors with the candidates.
 - Output: one line per item, `✓` / `!` / `✗` + dim details; colors follow the terminal
-  (none when piped, `NO_COLOR` respected). Errors to stderr. Exit 1 if any item failed.
+  (none when piped, `NO_COLOR` respected). `✓`/`!` lines to stdout, `✗` lines and hints to
+  stderr. Exit 1 if any item failed or was skipped for local changes; warnings (e.g. `disable`
+  of a skill that is not enabled) keep exit 0.
+- Untrusted text (skill metadata and markdown, skills.sh results, entry names found on disk,
+  errors quoting them) never reaches the terminal as escape sequences: every printed line,
+  and rendered markdown after Glamour (which decodes entities like `&#27;`), keeps only SGR
+  styling. JSON output is unchanged data.
+- Ctrl-C cancels network work and a pending prompt, and stops before the next item of a
+  multi-item command; a second Ctrl-C exits immediately.
 
 ## 9. TUI
 
@@ -322,8 +340,8 @@ changes made is printed to the normal screen.
  space link  c copy  a agents  s scope  u update  x remove  / filter  ? help
 ```
 
-- Layout: list + preview at ≥ 100 columns; narrower: list only, `enter` opens the preview,
-  `esc` returns. Resizes live.
+- Layout: list + preview at ≥ 100 columns; narrower: list only. `enter` opens the preview full
+  screen (in both layouts), `esc` returns. Resizes live.
 - Header: the active scope is prominent; the other scope is summarized (e.g. `global: 3`).
   `s` switches scope (only when a project is available).
 
@@ -332,27 +350,30 @@ Skills view
   partial, `○` off, `✗` broken/conflict. Badges: `global` (enabled globally while viewing a
   project), `outdated`, `modified`, `update`, `invalid`, `linked`.
 - `space`: off → enable as link (default agents); enabled → disable.
-- `c`: off → enable as copy; link → convert to copy; copy → convert to link.
-- `a`: per-skill agent checklist for the active scope (toggle placements per agent).
+- `c`: off → enable as copy; link or mixed → convert to copies; copy → convert to links.
+- `a`: per-skill agent checklist for the active scope (toggle placements per agent). Agents
+  sharing a skill directory are one item, since they share its placement.
 - `A`: default agents preference (writes config).
 - `r`: check updates (async; header spinner). `u`: update the highlighted skill (library
   update and/or copy refresh).
 - `x`: remove from library (modal confirm). `e`: edit SKILL.md in `$VISUAL`/`$EDITOR`.
 - `/`: fuzzy filter; `tab`/`shift+tab` cycle All/Enabled/Issues. Issues lists invalid skills,
-  broken and conflicting placements, modified copies, and unmanaged (`other`) entries.
+  broken and conflicting placements, modified copies, and unmanaged (`other`) entries; `space`
+  removes a broken link, unmanaged entries are never touched.
 - `ctrl+d` / `ctrl+u`: scroll preview.
 - Empty library: a friendly empty state pointing to Find and `myskills add`.
 - Destructive actions (removing a copy, `ErrModified`) open a confirm modal.
 
 Find view (`f` from Skills, `esc` back; `myskills find` opens here)
 - The input is always focused. Text that parses as an explicit source (URL, `owner/repo`
-  with a slash, a path) adds a first row "Browse <source>": `enter` fetches it and lists its
-  skills (preview from local files).
+  with a slash, a path) shows a single row "Browse <source>" instead of search results:
+  `enter` fetches it and lists its skills (preview from local files).
 - Otherwise a debounced skills.sh search (≈250 ms, ≥ 2 chars); stale responses are dropped by
   request id; errors show inline with retry (`ctrl+r`).
 - Rows: name, `owner/repo`, installs (`12.3K`), `✓ in library`.
 - `enter`: add the highlighted skill to the library (row spinner → `✓ added`). Adding never
-  enables; the status line hints how to enable. `ctrl+o`: open the source in the browser.
+  enables; the status line hints how to enable. `ctrl+o`: open the source in the browser (the
+  repository for a search result, which carries no path within it).
 
 Add picker (`myskills add <source>` with several candidates): checklist + preview,
 `space` toggle, `ctrl+a` all, `enter` install, `esc` cancel.
@@ -360,7 +381,7 @@ Add picker (`myskills add <source>` with several candidates): checklist + previe
 Behavior rules
 - Mutations run as commands; while one runs for a skill, its keys are ignored (no duplicate
   work). Network requests are cancellable and never block input.
-- Remote text (names, descriptions, markdown) is stripped of control sequences before display.
+- Untrusted text is sanitized as in §8 (`internal/sanitize`); rendered previews keep only SGR.
 - One palette with light/dark variants chosen from the terminal background, one accent color,
   muted secondary text, semantic success/warning/error. No Nerd Font glyphs.
 - Help bar from `bubbles/help`; `?` shows full help.
@@ -371,8 +392,10 @@ Behavior rules
 main.go                cli.Execute()
 internal/
   skill/   validate, hash, discover, copy tree — filesystem only, no state
-  source/  spec parsing, git (clone, ls-remote, rev-parse, ls-files, check-ignore, worktrees),
-           skills.sh client
+  source/  source spec parsing, labels and web URLs
+  git/     clone, ls-remote, rev-parse, ls-files, check-ignore, worktrees
+  skillssh/ skills.sh search and download client
+  sanitize/ untrusted text made safe for the terminal (keeps only SGR styling)
   agent/   Agent, built-ins, custom agent validation, dir per scope
   store/   paths, config.json, lock.json, mutation lock, atomic writes
   core/    the domain service shared by all frontends: library (scan, resolve, add, remove),

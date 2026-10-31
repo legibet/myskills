@@ -24,6 +24,27 @@ func (s *Service) Agents() ([]agent.Agent, error) {
 	return agent.All(cfg.CustomAgents), nil
 }
 
+// AgentDir is a skill directory in a scope and the agents that use it.
+type AgentDir struct {
+	Path   string   // as configured for the first agent using it
+	Agents []string // ids of the agents using it, in agent order
+}
+
+// AgentDirs returns the skill directories of the known agents in the scope,
+// one per resolved location: agents whose directories resolve to the same
+// place (.claude/skills → .agents/skills) share it, and its placements.
+func (s *Service) AgentDirs(sc Scope) ([]AgentDir, error) {
+	st, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	var dirs []AgentDir
+	for _, d := range agentDirs(st.agents, sc) {
+		dirs = append(dirs, AgentDir{Path: d.path, Agents: d.agents})
+	}
+	return dirs, nil
+}
+
 // SetDefaultAgents sets the agents used for new enablements.
 func (s *Service) SetDefaultAgents(ids []string) error {
 	if len(ids) == 0 {
