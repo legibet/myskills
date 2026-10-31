@@ -360,7 +360,7 @@ func (s *Service) applySteps(st *state, sk Skill, steps []step) ([]Change, error
 				return nil, err
 			}
 		}
-		if err := skill.Copy(src, stp.stage, boundary); err != nil {
+		if err := copySkill(src, stp.stage, boundary); err != nil {
 			return nil, err
 		}
 		if stp.hash, err = skill.Hash(stp.stage); err != nil {

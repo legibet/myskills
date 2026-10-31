@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/legibet/myskills/internal/agent"
+	"github.com/legibet/myskills/internal/skill"
 	"github.com/legibet/myskills/internal/skillssh"
 	"github.com/legibet/myskills/internal/store"
 )
@@ -172,6 +173,17 @@ func followPath(p string, links *int) string {
 	return followPath(target, links)
 }
 
+// lstat is os.Lstat with the identity of the file read now, for os.SameFile
+// to tell later whether the path still holds the same file: Windows reads it
+// lazily, from whatever is at the path by then.
+func lstat(path string) (fs.FileInfo, error) {
+	info, err := os.Lstat(path)
+	if err == nil {
+		os.SameFile(info, info)
+	}
+	return info, err
+}
+
 // isLink reports whether info describes a symlink, or a junction on Windows,
 // which Go reports as an irregular file.
 func isLink(info fs.FileInfo) bool {
@@ -181,11 +193,13 @@ func isLink(info fs.FileInfo) bool {
 	return runtime.GOOS == "windows" && info.Mode()&fs.ModeIrregular != 0
 }
 
-// rename and removeAll are os.Rename and os.RemoveAll as used on placements;
-// tests replace them to fail a swap or to change files mid-operation.
+// rename, removeAll and copySkill are os.Rename, os.RemoveAll and skill.Copy
+// as used to replace and remove entries; tests replace them to fail a swap or
+// to change files mid-operation.
 var (
 	rename    = os.Rename
 	removeAll = os.RemoveAll
+	copySkill = skill.Copy
 )
 
 // swapIn moves the prepared entry stage to dest. Whatever is at dest is first

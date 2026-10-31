@@ -299,7 +299,7 @@ func (s *Service) applyUpdate(lock *store.Lock, c UpdateCheck, force bool) error
 	// A symlink anywhere on the way would make the update write outside the
 	// library.
 	dest := filepath.Join(s.paths.Skills, filepath.FromSlash(c.Skill.Path))
-	info, err := os.Stat(dest)
+	info, err := lstat(dest)
 	if err != nil {
 		return err
 	}
@@ -312,7 +312,7 @@ func (s *Service) applyUpdate(lock *store.Lock, c UpdateCheck, force bool) error
 	}
 	defer func() { _ = os.RemoveAll(work) }()
 	stage := filepath.Join(work, filepath.Base(dest))
-	if err := skill.Copy(c.staged, stage, c.staged); err != nil {
+	if err := copySkill(c.staged, stage, c.staged); err != nil {
 		return err
 	}
 	if _, err := skill.Read(stage); err != nil {
@@ -322,8 +322,12 @@ func (s *Service) applyUpdate(lock *store.Lock, c UpdateCheck, force bool) error
 	if err != nil {
 		return err
 	}
-	// Checked right before the swap, so that edits made while the new version
-	// was prepared are not lost.
+	// Checked right before the swap: the folder must still be the one found
+	// above, and edits made while the new version was prepared are not lost.
+	// Force waives only the second.
+	if now, err := os.Lstat(dest); err != nil || !os.SameFile(info, now) {
+		return errorf(ErrConflict, "%s changed while myskills was working; not updated", c.Skill.Path)
+	}
 	if h, err := skill.Hash(dest); (err != nil || h != rec.Hash) && !force {
 		return errorf(ErrModified, "%s has local changes, so it was not updated; force overwrites them", c.Skill.Path)
 	}

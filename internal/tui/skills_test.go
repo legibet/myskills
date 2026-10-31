@@ -598,7 +598,8 @@ func TestUpdateRetryRedoesOnlyTheFailedPhase(t *testing.T) {
 	}
 
 	// Meanwhile a newer version appears upstream and the library gets local
-	// changes: discarding the copy's changes must not replace them.
+	// changes: discarding the project copy's changes must not replace them,
+	// nor force the global copies.
 	f.mu.Lock()
 	f.lib[3].Modified = true
 	f.checks = []core.UpdateCheck{{Skill: f.lib[3], State: core.Available}}
@@ -609,7 +610,7 @@ func TestUpdateRetryRedoesOnlyTheFailedPhase(t *testing.T) {
 		"ApplyUpdates [tdd] force=false",
 		"RefreshCopies /work/proj [tdd] force=false",
 		"RefreshCopies /work/proj [tdd] force=true",
-		"RefreshCopies global [tdd] force=true",
+		"RefreshCopies global [tdd] force=false",
 	}
 	if got := f.called(""); !slices.Equal(got, want) {
 		t.Fatalf("calls = %v, want %v", got, want)

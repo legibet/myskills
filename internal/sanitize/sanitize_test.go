@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"unicode"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestText(t *testing.T) {
@@ -36,15 +38,17 @@ func TestLine(t *testing.T) {
 
 func TestStyled(t *testing.T) {
 	tests := map[string]string{
-		"\x1b[1;38;2;1;2;3mbold\x1b[0m":              "\x1b[1;38;2;1;2;3mbold\x1b[0m",
-		"\x1b[4:3mcurly\x1b[m":                       "\x1b[4:3mcurly\x1b[m",
-		"\x1b[31mred\x1b[2Jcleared":                  "\x1b[31mredcleared",
-		"\x1b[?25lhidden cursor":                     "hidden cursor",
-		"\x1b]0;title\x07text":                       "text",
-		"\x1bPdcs\x1b\\text":                         "text",
-		"ok\r\nnext":                                 "ok\nnext",
-		"\x1b[" + strings.Repeat("1;", 40) + "mlong": "\x1b[" + strings.Repeat("1;", 40) + "mlong",
-		"\x1b[>4;1mkeys":                             "keys",
+		"\x1b[1;38;2;1;2;3mbold\x1b[0m":               "\x1b[1;38;2;1;2;3mbold\x1b[0m",
+		"\x1b[4:3mcurly\x1b[m":                        "\x1b[4:3mcurly\x1b[m",
+		"\x1b[31mred\x1b[2Jcleared":                   "\x1b[31mredcleared",
+		"\x1b[?25lhidden cursor":                      "hidden cursor",
+		"\x1b]0;title\x07text":                        "text",
+		"\x1bPdcs\x1b\\text":                          "text",
+		"ok\r\nnext":                                  "ok\nnext",
+		"\x1b[" + strings.Repeat("1;", 40) + "mlong":  "long",
+		"\x1b[" + strings.Repeat("1;", 31) + "1mmax":  "\x1b[" + strings.Repeat("1;", 31) + "1mmax",
+		"\x1b[" + strings.Repeat("1:", 32) + "1mover": "over",
+		"\x1b[>4;1mkeys":                              "keys",
 	}
 	for in, want := range tests {
 		if got := Styled(in); got != want {
@@ -60,7 +64,7 @@ var sgr = regexp.MustCompile(`\x1b\[[0-9;:]*m`)
 func FuzzFilter(f *testing.F) {
 	for _, s := range []string{
 		"plain", "\x1b[31mred\x1b[0m", "\x1b]8;;http://x\x1b\\link", "\x1bPdcs\x1b\\",
-		"\x1b[" + strings.Repeat("1;", 40) + "m", "\x1b[" + strings.Repeat("9", 100) + "m",
+		"\x1b[" + strings.Repeat("1;", 40) + "m", "\x1b[" + strings.Repeat("1;", 31) + "1m", "\x1b[" + strings.Repeat("9", 100) + "m",
 		"\x1b]" + strings.Repeat("x", 5000), "\x1b[", "\x9b31m", "\xff\xfe", "a\x1b\x1b[2J[31m",
 	} {
 		f.Add(s)
@@ -76,6 +80,13 @@ func FuzzFilter(f *testing.F) {
 		check("Text", Text(s))
 		styled := Styled(s)
 		check("Styled without SGR", sgr.ReplaceAllString(styled, ""))
+		// What is kept must not overflow a terminal parser downstream.
+		p := ansi.NewParser()
+		var state byte
+		for rest := styled; len(rest) > 0; {
+			_, _, n, next := ansi.DecodeSequence(rest, state, p)
+			state, rest = next, rest[n:]
+		}
 		if again := Styled(styled); again != styled {
 			t.Fatalf("Styled is not idempotent on %q: %q then %q", s, styled, again)
 		}

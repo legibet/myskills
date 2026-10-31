@@ -165,6 +165,49 @@ func TestUpdateSkipsModified(t *testing.T) {
 	}
 }
 
+func TestUpdateRechecksTheSkillBeforeSwapping(t *testing.T) {
+	tests := []struct {
+		name   string
+		force  bool
+		change func(t *testing.T, dest string) // while the new version is staged
+		kind   error
+		kept   string // file the change made, which must survive
+	}{
+		{"edited", false, func(t *testing.T, dest string) {
+			writeFile(t, filepath.Join(dest, "mine.md"), "local")
+		}, ErrModified, "mine.md"},
+		{"replaced, forced", true, func(t *testing.T, dest string) {
+			if err := os.Rename(dest, dest+"-moved"); err != nil {
+				t.Fatal(err)
+			}
+			writeSkill(t, dest, "alpha", "unrelated")
+			writeFile(t, filepath.Join(dest, "unmanaged.md"), "x")
+		}, ErrConflict, "unmanaged.md"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := newEnv(t)
+			dir, url := e.repo("src", map[string]string{"alpha": "alpha"})
+			e.add(url)
+			writeSkill(t, filepath.Join(dir, "alpha"), "alpha", "v2")
+			commitAll(t, dir, "v2")
+			u := e.check("alpha")
+			dest := e.libDir("alpha")
+			copySkill = func(src, dst, boundary string) error {
+				tt.change(t, dest)
+				return skill.Copy(src, dst, boundary)
+			}
+			defer func() { copySkill = skill.Copy }()
+
+			res := e.svc.ApplyUpdates(u, nil, tt.force)
+			wantErr(t, res[0].Err, tt.kind, "alpha")
+			if res[0].Updated || !exists(filepath.Join(dest, tt.kept)) {
+				t.Errorf("apply = %+v; %s lost", res, tt.kept)
+			}
+		})
+	}
+}
+
 func TestUpdateRemovedUpstream(t *testing.T) {
 	e := newEnv(t)
 	dir, url := e.repo("src", map[string]string{"alpha": "skills/alpha", "beta": "skills/beta"})

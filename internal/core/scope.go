@@ -328,7 +328,7 @@ func (s *Service) scanDir(lock *store.Lock, d *agentDir) ([]Placement, error) {
 // classify describes the entry name in the agent dir d (design §6 Scan).
 func (s *Service) classify(lock *store.Lock, d *agentDir, name string) (Placement, error) {
 	p := Placement{Path: filepath.Join(d.path, name), Name: name, Agents: d.agents, Kind: KindOther}
-	info, err := os.Lstat(p.Path)
+	info, err := lstat(p.Path)
 	if err != nil {
 		return p, err
 	}
@@ -357,7 +357,6 @@ func (s *Service) classify(lock *store.Lock, d *agentDir, name string) (Placemen
 			key := filepath.Join(alias, name)
 			if rec, ok := lock.Copies[key]; ok {
 				p.Path, p.Kind, p.Skill, p.info = key, KindCopy, rec.Skill, info
-				os.SameFile(info, info) // Windows reads the file ID lazily: read it now
 				break
 			}
 		}

@@ -285,12 +285,13 @@ that supports the scope lacks a placement.
   record-less skills: not updatable. Parallelism 4. `--json` supported.
 - `update [skill…]`: run check; install updates from the same clone that was checked
   (stage, then swap: rename old → `.old-<rand>`, new → dest, remove old; restore on failure).
-  A locally modified library skill (checked right before the swap) is skipped unless
-  `--force`; so is a skill whose record changed since the check (another process updated
-  it), even with `--force`. Then refresh outdated, unmodified copies of the selected skills
-  (all library skills, updatable or not, when none are named) in the current project (if
-  any) and global scope. Skips are reported; exit code 1 if anything was skipped or failed.
-  "Removed upstream" is a warning.
+  A skill whose record changed since the check (another process updated it) is skipped,
+  even with `--force`. Right before the swap the skill folder is checked again: a locally
+  modified one is skipped unless `--force`, one replaced by another folder meanwhile even
+  with it. Then refresh outdated, unmodified copies of the selected skills (all library
+  skills, updatable or not, when none are named) in the current project (if any) and global
+  scope. Skips are reported; exit code 1 if anything was skipped or failed. "Removed
+  upstream" is a warning.
 
 ## 8. Commands
 
@@ -367,8 +368,8 @@ Skills view
   sharing a skill directory are one item, since they share its placement.
 - `A`: default agents preference (writes config).
 - `r`: check updates (async; header spinner). `u`: update the highlighted skill: the library
-  update, then the copy refresh. Each asks before discarding its own local changes, and
-  confirming forces only that step.
+  update, then the copy refresh of each scope. Each step asks before discarding its own local
+  changes, and confirming forces only that step.
 - `x`: remove from library (modal confirm). `e`: edit SKILL.md in `$VISUAL`/`$EDITOR`.
 - `/`: fuzzy filter; `tab`/`shift+tab` cycle All/Enabled/Issues. Issues lists invalid skills,
   broken and conflicting placements, modified copies, and unmanaged (`other`) entries; `space`

@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/ansi/parser"
 )
 
 // Text removes escape sequences, control characters other than newline and
@@ -54,14 +55,16 @@ func filter(s string, keepSGR bool) string {
 }
 
 // isSGR reports whether seq is ESC [ params m, with params only digits and
-// separators: colors and text attributes.
+// separators: colors and text attributes. Longer parameter lists than
+// terminal parsers hold (the TUI renderer's panics) are not kept.
 func isSGR(seq string) bool {
 	params, ok := strings.CutPrefix(seq, "\x1b[")
 	if !ok {
 		return false
 	}
 	params, ok = strings.CutSuffix(params, "m")
-	return ok && strings.Trim(params, "0123456789;:") == ""
+	return ok && strings.Trim(params, "0123456789;:") == "" &&
+		strings.Count(params, ";")+strings.Count(params, ":") < parser.MaxParamsSize
 }
 
 // isC1 reports whether b starts a C1 control as a raw byte (not UTF-8).

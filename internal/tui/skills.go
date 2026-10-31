@@ -680,41 +680,38 @@ func (a *app) removeModal() {
 
 // updateSkill is u: install an available upstream update of the skill, then
 // refresh its outdated copies in the project and global scopes. The library
-// and the copies are separate mutations, so that discarding the local changes
-// of one forces only that one.
+// and the copies of each scope are separate mutations, run one after another,
+// so that discarding the local changes of one forces only that one.
 func (a *app) updateSkill() tea.Cmd {
 	r, _ := a.current()
 	sk := *r.skill
 	svc, ctx, scopes, names, name := a.svc, a.ctx, a.scopes(), a.agentNames(), sanitize.Line(sk.Name)
-	var discard []string
-	for _, sc := range scopes {
-		if t := a.discardText(sk.Path, sc); t != "" {
-			discard = append(discard, t)
-		}
-	}
-	// copies refreshes the copies once the library is current; lib is what
-	// updating the library did.
-	copies := func(lib outcome) mutation {
-		return mutation{key: sk.Path, discard: strings.Join(discard, "\n\n"), run: func(force bool) outcome {
+	// copies refreshes the copies in scopes[i], then in the scopes after it;
+	// changed tells whether the steps before it changed or warned about
+	// anything.
+	var copies func(i int, changed bool) mutation
+	copies = func(i int, changed bool) mutation {
+		sc := scopes[i]
+		return mutation{key: sk.Path, discard: a.discardText(sk.Path, sc), run: func(force bool) outcome {
 			var out outcome
-			for _, sc := range scopes {
-				res, err := svc.RefreshCopies(sc, []string{sk.Path}, force)
-				for _, r := range res {
-					out.merge(describe(r, nil, "Refreshed the copies of %s", sk.Name, sc, names))
-				}
-				if err != nil {
-					out.err = err
-					return out
-				}
+			res, err := svc.RefreshCopies(sc, []string{sk.Path}, force)
+			for _, r := range res {
+				out.merge(describe(r, nil, "Refreshed the copies of %s", sk.Name, sc, names))
 			}
-			if len(lib.lines)+len(lib.warnings)+len(out.lines)+len(out.warnings) == 0 {
+			out.err = err
+			if err == nil && i == len(scopes)-1 && !changed && len(out.lines)+len(out.warnings) == 0 {
 				out.note = name + " is up to date"
 			}
 			return out
+		}, done: func(out outcome) tea.Cmd {
+			if out.err != nil || i == len(scopes)-1 {
+				return nil
+			}
+			return a.start(copies(i+1, changed || len(out.lines)+len(out.warnings) > 0), false)
 		}}
 	}
 	if !sk.Updatable() {
-		return a.start(copies(outcome{}), false)
+		return a.start(copies(0, false), false)
 	}
 	m := mutation{key: sk.Path, run: func(force bool) outcome {
 		return applyUpdate(ctx, svc, sk, force)
@@ -724,7 +721,7 @@ func (a *app) updateSkill() tea.Cmd {
 			return nil
 		}
 		delete(a.sk.updates, sk.Path)
-		return a.start(copies(out), false)
+		return a.start(copies(0, len(out.lines)+len(out.warnings) > 0), false)
 	}}
 	if sk.Modified {
 		m.discard = "Your changes to " + name + " in the library are replaced by the update."

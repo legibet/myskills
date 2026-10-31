@@ -49,4 +49,17 @@ func TestRenderMarkdownKeepsOnlySGR(t *testing.T) {
 	if !strings.Contains(ansi.Strip(out), "here") {
 		t.Fatalf("text lost: %q", out)
 	}
+
+	// An SGR with more parameters than the screen renderer's parser holds
+	// would crash it.
+	out = renderMarkdown("&#27;["+strings.Repeat("1;", 40)+"mhello", 60, newTheme(true))
+	p := ansi.NewParser()
+	var state byte
+	for rest := out; len(rest) > 0; {
+		_, _, n, next := ansi.DecodeSequence(rest, state, p)
+		state, rest = next, rest[n:]
+	}
+	if !strings.Contains(ansi.Strip(out), "hello") {
+		t.Fatalf("text lost: %q", out)
+	}
 }
