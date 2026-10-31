@@ -40,18 +40,29 @@ func (s Skill) Updatable() bool {
 }
 
 // SourceLabel is a short description of where the skill came from:
-// "owner/repo", "~/dev/tool", "linked ~/agent-skills", or "local".
+// "owner/repo" for git sources, the folder of a linked entry
+// ("~/agent-skills"), or "local".
 func (s Skill) SourceLabel() string {
 	switch {
 	case s.Linked:
-		return "linked " + tilde(s.LinkTarget)
-	case s.Record == nil:
-		return "local"
-	case s.Record.Source.Type == "git":
+		return tilde(s.LinkTarget)
+	case s.Record != nil && s.Record.Source.Type == "git":
 		return source.Label(s.Record.Source.URL)
-	default:
-		return tilde(s.Record.Source.Path)
 	}
+	return "local"
+}
+
+// DuplicateNames returns the names that more than one library skill has.
+// Frontends show a skill's library path only next to these names.
+func DuplicateNames(lib []Skill) map[string]bool {
+	seen, dup := map[string]bool{}, map[string]bool{}
+	for _, sk := range lib {
+		if seen[sk.Name] {
+			dup[sk.Name] = true
+		}
+		seen[sk.Name] = true
+	}
+	return dup
 }
 
 // Library scans the library and returns its skills sorted by name, then path.

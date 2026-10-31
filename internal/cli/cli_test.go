@@ -288,7 +288,7 @@ func TestAddLocal(t *testing.T) {
 		t.Error("collection should be a link")
 	}
 	r = e.ok(e.home, "list")
-	contains(t, r.out, "collection/two", "linked "+coll)
+	contains(t, r.out, "collection/two", coll)
 
 	_, url := e.repo(map[string]string{"x": "x"})
 	r = e.fails(e.home, "add", url, "--link")

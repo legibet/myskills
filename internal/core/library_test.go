@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -215,7 +216,7 @@ func TestInstallLocalFolder(t *testing.T) {
 	if sk.Record == nil || sk.Record.Source != want || sk.Record.Commit != "" {
 		t.Fatalf("record = %+v", sk.Record)
 	}
-	if got := sk.SourceLabel(); got != filepath.Join(dir, "my-tool") {
+	if got := sk.SourceLabel(); got != "local" {
 		t.Errorf("SourceLabel = %q", got)
 	}
 
@@ -261,7 +262,7 @@ func TestLinkLocalCollection(t *testing.T) {
 		if !sk.Linked || sk.Entry != "agent-skills" || sk.LinkTarget != coll || sk.Record != nil || !sk.Valid() || sk.Updatable() {
 			t.Errorf("skill %+v", sk)
 		}
-		if sk.SourceLabel() != "linked "+coll {
+		if sk.SourceLabel() != coll {
 			t.Errorf("SourceLabel = %q", sk.SourceLabel())
 		}
 	}
@@ -600,5 +601,12 @@ func TestInstallCopyFailureLeavesNothing(t *testing.T) {
 	}
 	if l := leftovers(t, e.svc.paths.Skills); len(l) > 0 {
 		t.Errorf("leftovers: %v", l)
+	}
+}
+
+func TestDuplicateNames(t *testing.T) {
+	lib := []Skill{{Name: "review", Path: "a/review"}, {Name: "tdd", Path: "tdd"}, {Name: "review", Path: "b/review"}}
+	if got := DuplicateNames(lib); !maps.Equal(got, map[string]bool{"review": true}) {
+		t.Errorf("DuplicateNames = %v", got)
 	}
 }
