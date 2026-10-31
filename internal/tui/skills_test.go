@@ -486,7 +486,7 @@ func TestHeaderKeepsScopeWithLongPath(t *testing.T) {
 func TestHelpToggle(t *testing.T) {
 	h := newHarness(t, libraryFixture(), projectOptions(), 120, 30)
 	h.press("?")
-	h.contains("check updates", "default agents", "edit", "scroll preview")
+	h.contains("check updates", "default agents", "edit", "preview down")
 	h.press("?")
 	h.lacks("default agents")
 }
@@ -700,6 +700,21 @@ func TestHelpBarAndFullHelp(t *testing.T) {
 	h.press("esc")
 	if h.a.help.ShowAll || h.quit {
 		t.Fatal("esc should close the help")
+	}
+
+	// Narrower, the groups fold into fewer columns rather than being cut.
+	h.press("?")
+	for _, w := range []int{80, 60} {
+		h.send(windowSize(w, 30))
+		help := h.a.helpView()
+		if strings.Contains(help, "…") || !strings.Contains(help, "quit") {
+			t.Errorf("width %d: full help =\n%s", w, help)
+		}
+		for l := range strings.Lines(help) {
+			if ansi.StringWidth(strings.TrimSuffix(l, "\n")) > w-2 {
+				t.Errorf("width %d: full help line too wide: %q", w, l)
+			}
+		}
 	}
 }
 

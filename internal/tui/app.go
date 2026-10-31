@@ -147,7 +147,6 @@ func (a *app) update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.width, a.height = msg.Width, msg.Height
-		a.help.SetWidth(msg.Width - 2)
 	case tea.FocusMsg:
 		return a.reload()
 	case tea.BackgroundColorMsg:
@@ -717,13 +716,13 @@ func (a *app) helpView() string {
 	case a.view == Find && a.fd.typing:
 		return fitHelp(a.help, w, a.qkeys.ShortHelp())
 	case a.view == Find && a.help.ShowAll:
-		return a.help.FullHelpView(a.nkeys.FullHelp())
+		return fitFullHelp(a.help, w, a.nkeys.FullHelp())
 	case a.view == Find:
 		return fitHelp(a.help, w, a.nkeys.ShortHelp(), a.nkeys.Help)
 	case a.sk.filtering:
 		return fitHelp(a.help, w, a.fkeys.ShortHelp())
 	case a.help.ShowAll:
-		return a.help.FullHelpView(a.keys.FullHelp())
+		return fitFullHelp(a.help, w, a.keys.FullHelp())
 	}
 	return fitHelp(a.help, w, a.keys.ShortHelp(), a.keys.Help)
 }
@@ -739,6 +738,22 @@ func fitHelp(h help.Model, w int, bindings []key.Binding, pinned ...key.Binding)
 			return s
 		}
 	}
+}
+
+// fitFullHelp renders the groups as columns, or, when they do not fit in w
+// cells, as two columns, then as one.
+func fitFullHelp(h help.Model, w int, groups [][]key.Binding) string {
+	h.SetWidth(0)
+	half := (len(groups) + 1) / 2
+	for _, cols := range [][][]key.Binding{
+		groups,
+		{slices.Concat(groups[:half]...), slices.Concat(groups[half:]...)},
+	} {
+		if s := h.FullHelpView(cols); lipgloss.Width(s) <= w {
+			return s
+		}
+	}
+	return h.FullHelpView([][]key.Binding{slices.Concat(groups...)})
 }
 
 // centered places a block in the middle of the body area.

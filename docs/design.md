@@ -371,7 +371,8 @@ changes made is printed to the normal screen.
   compatibility, allowed-tools, metadata entries), and the rendered body. Find and the add
   picker preview SKILL.md the same way.
 - Help bar: the keys that work for the highlighted row, in priority order, as many as fit the
-  width, always ending with `? help`. `?` shows the full help; `?` or `esc` closes it.
+  width, always ending with `? help`. `?` shows the full help, in fewer columns when narrow;
+  `?` or `esc` closes it.
 - Status lines and preview notes state what happened or what is; keys are left to the help bar.
 
 Skills view

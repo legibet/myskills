@@ -42,8 +42,8 @@ func newSkillsKeys() skillsKeys {
 		Edit:       bind([]string{"e"}, "e", "edit"),
 		Filter:     bind([]string{"/"}, "/", "filter"),
 		Read:       bind([]string{"enter", "l", "right"}, "enter", "read"),
-		ScrollDown: bind([]string{"ctrl+d"}, "ctrl+d", "scroll preview"),
-		ScrollUp:   bind([]string{"ctrl+u"}, "ctrl+u", "scroll preview up"),
+		ScrollDown: bind([]string{"ctrl+d"}, "ctrl+d", "preview down"),
+		ScrollUp:   bind([]string{"ctrl+u"}, "ctrl+u", "preview up"),
 		Find:       bind([]string{"f"}, "f", "find"),
 		Help:       bind([]string{"?"}, "?", "help"),
 		Quit:       bind([]string{"q", "ctrl+c"}, "q", "quit"),
@@ -144,8 +144,8 @@ func newFindKeys() findKeys {
 		Search:     bind([]string{"/"}, "/", "search"),
 		Retry:      bind([]string{"r"}, "r", "retry"),
 		Leave:      bind([]string{"h", "left"}, "h", "back to results"),
-		ScrollDown: bind([]string{"ctrl+d"}, "ctrl+d", "scroll preview"),
-		ScrollUp:   bind([]string{"ctrl+u"}, "ctrl+u", "scroll preview up"),
+		ScrollDown: bind([]string{"ctrl+d"}, "ctrl+d", "preview down"),
+		ScrollUp:   bind([]string{"ctrl+u"}, "ctrl+u", "preview up"),
 		Back:       bind([]string{"esc"}, "esc", "skills"),
 		Help:       bind([]string{"?"}, "?", "help"),
 		Quit:       bind([]string{"q", "ctrl+c"}, "q", "quit"),
@@ -177,8 +177,8 @@ func newPickerKeys() pickerKeys {
 		All:        bind([]string{"ctrl+a"}, "ctrl+a", "all"),
 		Install:    bind([]string{"enter"}, "enter", "add"),
 		Cancel:     bind([]string{"esc", "q", "ctrl+c"}, "esc", "cancel"),
-		ScrollDown: bind([]string{"ctrl+d"}, "ctrl+d", "scroll preview"),
-		ScrollUp:   bind([]string{"ctrl+u"}, "ctrl+u", "scroll preview up"),
+		ScrollDown: bind([]string{"ctrl+d"}, "ctrl+d", "preview down"),
+		ScrollUp:   bind([]string{"ctrl+u"}, "ctrl+u", "preview up"),
 	}
 }
 
