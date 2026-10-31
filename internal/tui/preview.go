@@ -173,12 +173,18 @@ type docsChangedMsg struct{ keys []string }
 
 // recheckLocal reads the loaded docs from disk again, off the UI goroutine,
 // and reports those that changed, so that only they load again and the
-// others stay on screen.
+// others stay on screen. Loads in flight start over, since they may have
+// read a file before it changed.
 func (p *previewer) recheckLocal() tea.Cmd {
 	loaded := map[string]docResult{}
 	for key, l := range p.md {
 		if strings.HasPrefix(key, dirDocPrefix) {
 			loaded[key] = l
+		}
+	}
+	for key := range p.loading {
+		if strings.HasPrefix(key, dirDocPrefix) {
+			p.invalidate(key)
 		}
 	}
 	return func() tea.Msg {

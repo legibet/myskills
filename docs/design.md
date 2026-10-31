@@ -412,8 +412,8 @@ Find view (`f` from Skills; `myskills find` opens here)
 - Otherwise a debounced skills.sh search (≈250 ms, ≥ 2 chars); stale responses are dropped by
   request id; errors show inline.
 - Rows: name, `owner/repo`, state (`✓ in library`, `✓ added`, `✗ conflict`, `✗ invalid`) and
-  the installs (`12.3K`) at the right edge, where they line up; when the row does not fit,
-  the installs are dropped first.
+  the installs (`12.3K`) at the right edge, where they line up. A short row shortens the name
+  and source first; when that leaves too little room, the installs are dropped before the state.
 - `space` asks `Add <skill> to the library?` with the git URL it downloads from (or the local
   folder), then adds it (row spinner → `✓ added`). A skill already in the library, or whose
   name the library has from another source, is reported instead. Adding never enables.

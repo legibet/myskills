@@ -822,7 +822,9 @@ func (a *app) findRowView(r findRow, w int, selected bool) string {
 		}
 	}
 	// The state, then the install count at the right edge, where counts line
-	// up. When the row does not fit, the count is dropped first.
+	// up. A row that does not fit shortens its left side, as layoutRow does,
+	// and drops the count before the state when the right side would take over
+	// 40% of it.
 	var right []seg
 	if text, st := a.findStatus(r); text != "" {
 		if a.busy[r.key()] || r.browse != "" && a.fd.fetching {

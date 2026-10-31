@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"slices"
@@ -739,5 +740,22 @@ func TestReloadReadsChangedFiles(t *testing.T) {
 	h.send(tea.FocusMsg{})
 	if slices.ContainsFunc(h.a.data.lib, func(sk core.Skill) bool { return sk.Path == "tdd" }) {
 		t.Fatal("focus should reload the library")
+	}
+}
+
+// A load in flight on reload may have read the file before it changed: its
+// result is dropped and the doc loads again.
+func TestReloadRestartsLoadsInFlight(t *testing.T) {
+	ctx, th := context.Background(), newTheme(true)
+	p := newPreviewer()
+	d := dirDoc("/lib/tdd")
+	load := p.request(ctx, d, 40, th)
+	p.recheckLocal()
+	p.handle(load().(docMsg))
+	if _, ready, _ := p.body(d, 40, th); ready {
+		t.Fatal("a load started before the reload should not be shown")
+	}
+	if p.request(ctx, d, 40, th) == nil {
+		t.Fatal("the doc should load again")
 	}
 }
