@@ -163,6 +163,27 @@ func TestCopyDereferencesWithinBoundary(t *testing.T) {
 	if got := readLink(t, filepath.Join(dst, "lib", "skill")); got != filepath.FromSlash("../SKILL.md") {
 		t.Errorf("lib/skill -> %q, want ../SKILL.md", got)
 	}
+
+	// CopyHash is the hash of the copy, and follows the dereferenced content.
+	copyHash := func() string {
+		t.Helper()
+		h, err := CopyHash(src, repo)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return h
+	}
+	if got := copyHash(); got != mustHash(t, dst) {
+		t.Errorf("CopyHash = %s, the copy hashes %s", got, mustHash(t, dst))
+	}
+	before, srcHash := copyHash(), mustHash(t, src)
+	writeFile(t, filepath.Join(repo, "shared", "style.md"), "changed")
+	if copyHash() == before {
+		t.Error("CopyHash ignores a change behind a dereferenced link")
+	}
+	if mustHash(t, src) != srcHash {
+		t.Error("Hash follows a link it should not")
+	}
 }
 
 func TestCopyFailures(t *testing.T) {

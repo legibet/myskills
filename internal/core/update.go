@@ -306,10 +306,6 @@ func (s *Service) applyUpdate(lock *store.Lock, c UpdateCheck, force bool) error
 	if !info.IsDir() || realPath(dest) != filepath.Join(realPath(s.paths.Skills), filepath.FromSlash(c.Skill.Path)) {
 		return fmt.Errorf("%s is not a folder in the library; not updated", c.Skill.Path)
 	}
-	if h, err := skill.Hash(dest); (err != nil || h != rec.Hash) && !force {
-		return errorf(ErrModified, "%s has local changes, so it was not updated; force overwrites them", c.Skill.Path)
-	}
-
 	work, err := os.MkdirTemp(filepath.Dir(dest), ".incoming-")
 	if err != nil {
 		return err
@@ -325,6 +321,11 @@ func (s *Service) applyUpdate(lock *store.Lock, c UpdateCheck, force bool) error
 	hash, err := skill.Hash(stage)
 	if err != nil {
 		return err
+	}
+	// Checked right before the swap, so that edits made while the new version
+	// was prepared are not lost.
+	if h, err := skill.Hash(dest); (err != nil || h != rec.Hash) && !force {
+		return errorf(ErrModified, "%s has local changes, so it was not updated; force overwrites them", c.Skill.Path)
 	}
 	if err := swapIn(stage, dest); err != nil {
 		return err

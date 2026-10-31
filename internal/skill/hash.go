@@ -27,11 +27,6 @@ func Hash(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	type entry struct {
-		rel, path string
-		mode      fs.FileMode
-	}
 	var entries []entry
 	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -57,14 +52,32 @@ func Hash(dir string) (string, error) {
 		if err != nil {
 			return err
 		}
-		entries = append(entries, entry{filepath.ToSlash(rel), path, info.Mode()})
+		e := entry{rel: filepath.ToSlash(rel), mode: info.Mode(), path: path}
+		if e.mode&fs.ModeSymlink != 0 {
+			if e.link, err = os.Readlink(path); err != nil {
+				return err
+			}
+		}
+		entries = append(entries, e)
 		return nil
 	})
 	if err != nil {
 		return "", err
 	}
-	slices.SortFunc(entries, func(a, b entry) int { return strings.Compare(a.rel, b.rel) })
+	return hashEntries(entries)
+}
 
+// entry is a file, directory or symlink below a skill directory.
+type entry struct {
+	rel  string // slash-separated path below the root
+	mode fs.FileMode
+	path string // where a file's content is read
+	link string // a symlink's target
+}
+
+// hashEntries hashes entries as Hash describes, sorting them first.
+func hashEntries(entries []entry) (string, error) {
+	slices.SortFunc(entries, func(a, b entry) int { return strings.Compare(a.rel, b.rel) })
 	h := sha256.New()
 	for _, e := range entries {
 		switch {
@@ -85,13 +98,9 @@ func Hash(dir string) (string, error) {
 			h.Write([]byte{exec})
 			writeField(h, data)
 		case e.mode&fs.ModeSymlink != 0:
-			target, err := os.Readlink(e.path)
-			if err != nil {
-				return "", err
-			}
 			h.Write([]byte{'L'})
 			writeField(h, []byte(e.rel))
-			writeField(h, []byte(target))
+			writeField(h, []byte(e.link))
 		default:
 			return "", errors.New(e.rel + ": unsupported file type")
 		}

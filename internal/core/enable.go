@@ -356,7 +356,7 @@ func (s *Service) applySteps(st *state, sk Skill, steps []step) ([]Change, error
 		// Hashed before copying, so that a library change made meanwhile
 		// shows the copy as outdated.
 		if libHash == "" {
-			if libHash, err = skill.Hash(src); err != nil {
+			if libHash, err = skill.CopyHash(src, boundary); err != nil {
 				return nil, err
 			}
 		}
@@ -390,26 +390,45 @@ func (s *Service) applySteps(st *state, sk Skill, steps []step) ([]Change, error
 }
 
 // recheck checks that the placement path of a step still holds what planning
-// found there, right before it is replaced: preparing copies takes time, in
-// which an editor or agent may have changed it.
+// found there, right before it is replaced.
 func recheck(lock *store.Lock, stp step) error {
-	switch {
-	case stp.old == nil:
-		_, err := os.Lstat(stp.dest)
-		if err == nil {
-			return errorf(ErrConflict, "%s was created while myskills was working; left in place", tilde(stp.dest))
+	if stp.old != nil {
+		return unchanged(lock, *stp.old)
+	}
+	_, err := os.Lstat(stp.dest)
+	if err == nil {
+		return errorf(ErrConflict, "%s was created while myskills was working; left in place", tilde(stp.dest))
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// unchanged checks that a managed placement still is what the scan found,
+// right before it is replaced or removed: preparing copies and removing other
+// placements take time, in which an editor or agent may have changed it. Force
+// lets a copy found modified go, which waives the content check but never the
+// check that it is still the same directory.
+func unchanged(lock *store.Lock, p Placement) error {
+	switch p.Kind {
+	case KindLink, KindBroken:
+		if target, err := os.Readlink(p.Path); err != nil || target != p.target {
+			return errorf(ErrConflict, "%s changed while myskills was working; left in place", tilde(p.Path))
 		}
-		if !errors.Is(err, fs.ErrNotExist) {
-			return err
+	case KindCopy:
+		rec, ok := lock.Copies[p.Path]
+		info, err := os.Lstat(p.Path)
+		if !ok || err != nil || !os.SameFile(info, p.info) {
+			return errorf(ErrConflict, "%s changed while myskills was working; left in place", tilde(p.Path))
 		}
-	case stp.old.Kind == KindLink || stp.old.Kind == KindBroken:
-		if target, err := os.Readlink(stp.dest); err != nil || target != stp.old.target {
-			return errorf(ErrConflict, "%s changed while myskills was working; left in place", tilde(stp.dest))
+		if !p.Modified {
+			if h, err := skill.Hash(p.Path); err != nil || h != rec.Hash {
+				return errorf(ErrModified, "%s changed while myskills was working; left in place", tilde(p.Path))
+			}
 		}
-	case stp.old.Kind == KindCopy && !stp.old.Modified: // a modified copy is discarded by force
-		if h, err := skill.Hash(stp.dest); err != nil || h != lock.Copies[stp.old.Path].Hash {
-			return errorf(ErrModified, "%s changed while myskills was working; left in place", tilde(stp.dest))
-		}
+	default:
+		return fmt.Errorf("%s is not managed by myskills; left in place", p.Path)
 	}
 	return nil
 }
@@ -435,15 +454,13 @@ func (s *Service) Disable(sc Scope, ref string, opts DisableOptions) (Result, er
 			return err
 		}
 		sk, resolveErr := resolve(lib, ref)
-		// Like resolve, a path wins over a name: the missing library path of a
-		// broken link names that link even when a skill has that name.
-		if resolveErr == nil && sk.Path != ref && slices.ContainsFunc(placements, func(p Placement) bool {
-			return p.Kind == KindBroken && p.Skill == ref
-		}) {
-			resolveErr = errorf(ErrNotFound, "no skill %q in the library", ref)
-		}
 		var match func(Placement) bool
 		switch {
+		case slices.ContainsFunc(placements, func(p Placement) bool { return p.Kind == KindBroken && p.Skill == ref }):
+			// Like resolve, a path wins over a name: the missing library path
+			// of broken links names them, even when ref is also a skill name.
+			resolveErr = errorf(ErrNotFound, "no skill %q in the library", ref)
+			match = func(p Placement) bool { return p.Kind == KindBroken && p.Skill == ref }
 		case resolveErr == nil:
 			res.Skill = sk.Path
 			match = func(p Placement) bool { return p.managed() && p.Skill == sk.Path }
@@ -497,27 +514,17 @@ func (s *Service) Disable(sc Scope, ref string, opts DisableOptions) (Result, er
 // what the scan found: a link is unlinked (never followed), a recorded copy is
 // deleted along with its record.
 func removePlacement(lock *store.Lock, p Placement) error {
-	info, err := os.Lstat(p.Path)
-	if err != nil {
+	if err := unchanged(lock, p); err != nil {
 		return err
 	}
-	switch p.Kind {
-	case KindLink, KindBroken:
-		if !isLink(info) {
-			return fmt.Errorf("%s is no longer a link; left in place", p.Path)
-		}
+	if p.Kind != KindCopy {
 		return os.Remove(p.Path)
-	case KindCopy:
-		if _, ok := lock.Copies[p.Path]; !ok || isLink(info) || !info.IsDir() {
-			return fmt.Errorf("%s is not a recorded copy; left in place", p.Path)
-		}
-		if err := os.RemoveAll(p.Path); err != nil {
-			return err
-		}
-		delete(lock.Copies, p.Path)
-		return nil
 	}
-	return fmt.Errorf("%s is not managed by myskills; left in place", p.Path)
+	if err := removeAll(p.Path); err != nil {
+		return err
+	}
+	delete(lock.Copies, p.Path)
+	return nil
 }
 
 // RefreshCopies re-copies outdated, unmodified copy placements of the given

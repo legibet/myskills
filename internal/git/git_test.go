@@ -212,9 +212,6 @@ func TestCloneCanceled(t *testing.T) {
 
 func TestNotInstalled(t *testing.T) {
 	t.Setenv("PATH", "")
-	if Available() {
-		t.Fatal("Available() = true with an empty PATH")
-	}
 	if _, err := RemoteCommit(t.Context(), "file:///x", ""); !errors.Is(err, ErrNotFound) {
 		t.Errorf("RemoteCommit error = %v, want ErrNotFound", err)
 	}

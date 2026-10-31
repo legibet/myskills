@@ -31,13 +31,14 @@ func Styled(s string) string {
 
 func filter(s string, keepSGR bool) string {
 	var b strings.Builder
-	p := ansi.NewParser()
 	var state byte
 	for len(s) > 0 {
-		seq, _, n, next := ansi.DecodeSequence(s, state, p)
+		// No parser: its fixed parameter buffer overflows on long untrusted
+		// sequences, and isSGR reads the bytes instead.
+		seq, _, n, next := ansi.DecodeSequence(s, state, nil)
 		state, s = next, s[n:]
 		switch {
-		case keepSGR && isSGR(seq, ansi.Cmd(p.Command())):
+		case keepSGR && isSGR(seq):
 			b.WriteString(seq)
 		case seq[0] == ansi.ESC || isC1(seq[0]):
 			// Any other sequence: cursor movement, OSC titles and links, …
@@ -52,8 +53,15 @@ func filter(s string, keepSGR bool) string {
 	return b.String()
 }
 
-func isSGR(seq string, cmd ansi.Cmd) bool {
-	return ansi.HasCsiPrefix(seq) && cmd.Final() == 'm' && cmd.Prefix() == 0 && cmd.Intermediate() == 0
+// isSGR reports whether seq is ESC [ params m, with params only digits and
+// separators: colors and text attributes.
+func isSGR(seq string) bool {
+	params, ok := strings.CutPrefix(seq, "\x1b[")
+	if !ok {
+		return false
+	}
+	params, ok = strings.CutSuffix(params, "m")
+	return ok && strings.Trim(params, "0123456789;:") == ""
 }
 
 // isC1 reports whether b starts a C1 control as a raw byte (not UTF-8).

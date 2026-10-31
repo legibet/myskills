@@ -556,6 +556,75 @@ func TestEnableRechecksPlacementsBeforeReplacing(t *testing.T) {
 	}
 }
 
+func TestEnableForceKeepsReplacedCopy(t *testing.T) {
+	e := setup(t)
+	sc := e.project("proj", false)
+	e.enable(sc, "alpha", EnableOptions{Mode: Copy})
+	first := filepath.Join(sc.Root, ".agents", "skills", "alpha")
+	second := filepath.Join(sc.Root, ".claude", "skills", "alpha")
+	writeFile(t, filepath.Join(second, "notes.md"), "mine")
+	// Force discards the modified copy, but not a directory that replaced it
+	// while the first placement was swapped in.
+	rename = func(from, to string) error {
+		if to == first {
+			if err := os.RemoveAll(second); err != nil {
+				t.Fatal(err)
+			}
+			writeSkill(t, second, "alpha", "unrelated")
+		}
+		return os.Rename(from, to)
+	}
+	defer func() { rename = os.Rename }()
+
+	_, err := e.svc.Enable(sc, e.skill("alpha"), EnableOptions{Mode: Link, Force: true})
+	wantErr(t, err, ErrConflict, ".claude/skills/alpha", "left in place")
+	if !strings.Contains(readFile(t, filepath.Join(second, "SKILL.md")), "unrelated") {
+		t.Error("the directory that replaced the copy was deleted")
+	}
+}
+
+func TestDisableRechecksCopiesBeforeRemoving(t *testing.T) {
+	e := setup(t)
+	sc := e.project("proj", false)
+	e.enable(sc, "alpha", EnableOptions{Mode: Copy})
+	first := filepath.Join(sc.Root, ".agents", "skills", "alpha")
+	second := filepath.Join(sc.Root, ".claude", "skills", "alpha")
+	// The second copy is edited while the first one is removed.
+	removeAll = func(path string) error {
+		if path == first {
+			writeFile(t, filepath.Join(second, "notes.md"), "mine")
+		}
+		return os.RemoveAll(path)
+	}
+	defer func() { removeAll = os.RemoveAll }()
+
+	res, err := e.svc.Disable(sc, "alpha", DisableOptions{})
+	wantErr(t, err, ErrModified, ".claude/skills/alpha", "left in place")
+	if !slices.Equal(changePaths(res.Changes), []string{first}) {
+		t.Errorf("changes = %+v", res.Changes)
+	}
+	if !exists(filepath.Join(second, "notes.md")) {
+		t.Error("the edit was deleted")
+	}
+	if _, ok := e.lock().Copies[second]; !ok {
+		t.Error("the record of the kept copy was dropped")
+	}
+}
+
+func TestDisableBrokenByPathWithAmbiguousName(t *testing.T) {
+	e := setup(t)
+	sc := e.project("proj", false)
+	writeSkill(t, e.libDir("one/delta"), "delta", "")
+	writeSkill(t, e.libDir("two/delta"), "delta", "")
+	broken := filepath.Join(sc.Root, ".agents", "skills", "delta")
+	symlink(t, e.libDir("delta"), broken)
+
+	res, err := e.svc.Disable(sc, "delta", DisableOptions{})
+	if err != nil || !slices.Equal(changePaths(res.Changes), []string{broken}) {
+		t.Fatalf("disable = %+v, %v", res, err)
+	}
+}
+
 func TestEnableCopyInsideItsLinkedSource(t *testing.T) {
 	e := newEnv(t)
 	// A skill under development at the root of its repository.
@@ -591,6 +660,35 @@ func TestCopyOutdatedAgainstLibraryContent(t *testing.T) {
 	writeFile(t, filepath.Join(e.libDir("alpha"), "x"), "x v2")
 	if p := e.status(sc).Enablements[0].Placements[0]; !p.Outdated || p.Modified {
 		t.Errorf("after a library change: %+v", p)
+	}
+}
+
+func TestCopyOutdatedBehindDereferencedLink(t *testing.T) {
+	e := newEnv(t)
+	sc := e.project("proj", false)
+	// A linked collection whose skill links a file shared by the collection;
+	// copying dereferences the link.
+	coll := e.path("coll")
+	writeSkill(t, filepath.Join(coll, "alpha"), "alpha", "")
+	writeFile(t, filepath.Join(coll, "shared.md"), "v1")
+	symlink(t, "../shared.md", filepath.Join(coll, "alpha", "shared.md"))
+	if _, err := e.svc.LinkLocal(coll); err != nil {
+		t.Fatal(err)
+	}
+	e.enable(sc, "coll/alpha", EnableOptions{Mode: Copy, Agents: []string{"universal"}})
+	if p := e.status(sc).Enablements[0].Placements[0]; p.Outdated || p.Modified {
+		t.Errorf("right after enabling: %+v", p)
+	}
+
+	writeFile(t, filepath.Join(coll, "shared.md"), "v2")
+	if p := e.status(sc).Enablements[0].Placements[0]; !p.Outdated || p.Modified {
+		t.Errorf("after the shared file changed: %+v", p)
+	}
+	if _, err := e.svc.RefreshCopies(sc, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	if got := readFile(t, filepath.Join(sc.Root, ".agents", "skills", "alpha", "shared.md")); got != "v2" {
+		t.Errorf("refreshed copy: %q", got)
 	}
 }
 

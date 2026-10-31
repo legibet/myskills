@@ -181,8 +181,12 @@ func isLink(info fs.FileInfo) bool {
 	return runtime.GOOS == "windows" && info.Mode()&fs.ModeIrregular != 0
 }
 
-// rename is os.Rename; tests replace it to simulate a failed swap.
-var rename = os.Rename
+// rename and removeAll are os.Rename and os.RemoveAll as used on placements;
+// tests replace them to fail a swap or to change files mid-operation.
+var (
+	rename    = os.Rename
+	removeAll = os.RemoveAll
+)
 
 // swapIn moves the prepared entry stage to dest. Whatever is at dest is first
 // moved aside to a hidden ".old-*" sibling, restored if stage cannot take its

@@ -100,8 +100,9 @@ The macOS app's `state.json` is never read or written.
 - `hash` = content hash of what was installed (the upstream content). Local modification =
   current hash ≠ recorded hash. `commit` = last upstream commit verified to have that content.
 - `copies` keyed by absolute placement path; `hash` = content of the copy as written,
-  `libraryHash` = content of the library skill it was copied from. They differ when copying
-  normalizes symlinks, so each is compared with its own side (see §6 Scan).
+  `libraryHash` = content of the library skill it was copied from, hashed as a copy (§4).
+  They can differ (copying normalizes symlinks, the umask may drop permission bits), so each
+  is compared with its own side (see §6 Scan).
 - `projects`: project roots where myskills placed something. Used for "where is this skill
   enabled" and agent cleanup. A root is dropped only when it exists and holds no managed
   placement (an unmounted root is kept).
@@ -134,7 +135,10 @@ Copy rules (used for library installs and copy placements):
 - A symlink pointing outside the skill but inside the source root (repo / local folder) is
   dereferenced (its content copied), making the skill self-contained.
 - Any other symlink (absolute outside, escaping the source root, broken) fails the operation
-  with the offending path.
+  with the offending path, before anything is written.
+- Hashed as a copy, a library skill gives the hash its copy has, without copying: the same
+  rules, with dereferenced content in place of the links. A change behind such a link thus
+  shows its copies as outdated.
 
 Discovery in a fetched repo or a local folder:
 - Start dir has `SKILL.md` → the only candidate.
@@ -246,15 +250,19 @@ Dirs are deduplicated by resolved path (parent symlinks resolved, e.g. `.claude/
   occupant (and its library path when it is a link to another library skill). A broken link
   to the same library path is repaired; one to another library path is a conflict (disable it
   by that path first). `--force` never overrides a conflict.
-- Every target is checked before anything changes. Right before each placement is swapped in,
-  it is checked again (still absent, the same link, or an unmodified copy), so an edit made
-  meanwhile fails the operation instead of being lost.
+- Every target is checked before anything changes. Right before each placement is swapped in
+  or removed (enable, disable, refresh), it is checked again: still absent, the same link, or
+  the same copy directory with its recorded content. An edit made meanwhile fails that
+  placement instead of being lost. `--force` waives only the content check of a copy found
+  modified, never the check that it is still the same directory.
 
 ### Disable
 - Removes the skill's placements in the scope (all agents, or the `-a` ones), copy records,
   regenerates the exclude block. Unmodified copies are removed without asking in the CLI (the
   command is explicit); the TUI confirms copy deletion.
-- `disable <name>` also matches broken placements whose library skill no longer exists.
+- `disable <name>` also matches broken placements whose library skill no longer exists. A ref
+  that is the missing library path of a broken placement names that placement, even when it
+  is also the name of one or more library skills.
 
 ### Scan / status
 Classify every entry of every known agent dir (built-in + custom) in the scope:
@@ -262,7 +270,7 @@ Classify every entry of every known agent dir (built-in + custom) in the scope:
   against the root path and its resolved path) and exists → library path.
 - `broken`: such a link whose target is missing.
 - `copy`: real dir recorded in `lock.copies`; flags `modified` (current hash ≠ `hash`),
-  `outdated` (current library hash ≠ `libraryHash`).
+  `outdated` (the library skill hashed as a copy ≠ `libraryHash`).
 - `other`: anything else; shown, never touched.
 Per skill: placements, agents, mode (`link`/`copy`/`mixed`), `partial` when a default agent
 that supports the scope lacks a placement.
@@ -277,11 +285,12 @@ that supports the scope lacks a placement.
   record-less skills: not updatable. Parallelism 4. `--json` supported.
 - `update [skill…]`: run check; install updates from the same clone that was checked
   (stage, then swap: rename old → `.old-<rand>`, new → dest, remove old; restore on failure).
-  A locally modified library skill is skipped unless `--force`; so is a skill whose record
-  changed since the check (another process updated it), even with `--force`. Then refresh
-  outdated, unmodified copies of the selected skills (all library skills, updatable or not,
-  when none are named) in the current project (if any) and global scope. Skips are reported;
-  exit code 1 if anything was skipped or failed. "Removed upstream" is a warning.
+  A locally modified library skill (checked right before the swap) is skipped unless
+  `--force`; so is a skill whose record changed since the check (another process updated
+  it), even with `--force`. Then refresh outdated, unmodified copies of the selected skills
+  (all library skills, updatable or not, when none are named) in the current project (if
+  any) and global scope. Skips are reported; exit code 1 if anything was skipped or failed.
+  "Removed upstream" is a warning.
 
 ## 8. Commands
 
@@ -304,7 +313,9 @@ myskills update [skill…]         --force
 myskills agents                  list agents, defaults, dirs
 myskills agents use <id>…        set default agents
 myskills agents add <id> [--name N] [--project P] [--global G]
-myskills agents remove <id>      removes its link placements (global + known projects) first
+myskills agents remove <id>      removes its link placements (global + known projects) first;
+                                 its copies stay as unmanaged files. Placements in a dir it
+                                 shares with another agent stay managed.
 myskills completion <shell>      dynamic completion of skills and agents
 myskills --version
 ```
@@ -415,7 +426,9 @@ are skipped with a warning).
 ## 11. Platforms
 - Linux, macOS: symlinks, flock.
 - Windows: junctions for links, LockFileEx, drive/UNC local paths; names that are invalid
-  Windows filenames fail clearly. Built in CI, not integration-tested yet.
+  Windows filenames fail clearly. Junctions are made with `mklink /J` through `cmd`, which
+  expands `%VAR%` in paths. Cross-compiled (`GOOS=windows go build ./...`), not tested on
+  Windows yet.
 
 ## 12. Testing
 - Unit: validation (typed YAML), hash (ambiguity, exec bit), discovery, copy rules (symlink

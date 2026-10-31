@@ -19,12 +19,6 @@ var ErrNotRepo = errors.New("not a git repository")
 // ErrNotFound reports that git is not installed.
 var ErrNotFound = errors.New("git is not installed")
 
-// Available reports whether the git binary can be found.
-func Available() bool {
-	_, err := exec.LookPath("git")
-	return err == nil
-}
-
 // Clone shallow-clones url into dir (which must not exist) at ref, or at the
 // remote HEAD when ref is empty, and returns the checked-out commit.
 func Clone(ctx context.Context, url, ref, dir string) (commit string, err error) {

@@ -100,7 +100,9 @@ type Placement struct {
 	Modified bool   // copy content differs from its record
 	Outdated bool   // the library content changed since the copy was made
 
-	target string // a link's target as read, to recheck it before replacing it
+	// What the scan found, to recheck it before replacing or removing it.
+	target string      // a link's target as read
+	info   fs.FileInfo // a copy's directory
 }
 
 // managed reports whether myskills made the placement.
@@ -354,7 +356,8 @@ func (s *Service) classify(lock *store.Lock, d *agentDir, name string) (Placemen
 		for _, alias := range d.aliases {
 			key := filepath.Join(alias, name)
 			if rec, ok := lock.Copies[key]; ok {
-				p.Path, p.Kind, p.Skill = key, KindCopy, rec.Skill
+				p.Path, p.Kind, p.Skill, p.info = key, KindCopy, rec.Skill, info
+				os.SameFile(info, info) // Windows reads the file ID lazily: read it now
 				break
 			}
 		}
@@ -378,17 +381,15 @@ func (s *Service) libraryPath(target string) (string, bool) {
 // checkCopy sets Modified and Outdated on a copy placement. Unreadable
 // content counts as modified, so it is never deleted without force.
 //
-// Outdated compares the library with its content at copy time, not with the
-// copy: copying rewrites symlinks, so the two can differ when nothing changed.
+// Outdated compares what copying the library skill gives now with what it gave
+// at copy time, not with the copy, whose files the umask may have changed.
 func (s *Service) checkCopy(lock *store.Lock, p *Placement) {
 	rec := lock.Copies[p.Path]
 	h, err := skill.Hash(p.Path)
 	p.Modified = err != nil || h != rec.Hash
-	lib := filepath.Join(s.paths.Skills, filepath.FromSlash(rec.Skill))
-	if _, err := os.Stat(lib); err == nil {
-		h, err := skill.Hash(lib)
-		p.Outdated = err == nil && h != rec.LibraryHash
-	}
+	entry, _, _ := strings.Cut(rec.Skill, "/")
+	h, err = skill.CopyHash(filepath.Join(s.paths.Skills, filepath.FromSlash(rec.Skill)), filepath.Join(s.paths.Skills, entry))
+	p.Outdated = err == nil && h != rec.LibraryHash
 }
 
 // holdsPlacements reports whether a project root contains a placement made by

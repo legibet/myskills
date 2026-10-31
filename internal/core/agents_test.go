@@ -109,6 +109,32 @@ func TestRemoveAgent(t *testing.T) {
 	wantErr(t, err, ErrNotFound)
 }
 
+func TestRemoveAliasAgentKeepsSharedCopies(t *testing.T) {
+	e := setup(t)
+	sc := e.project("proj", false)
+	// .alias/skills resolves to the universal dir.
+	mkdirAll(t, filepath.Join(sc.Root, ".agents"))
+	symlink(t, ".agents", filepath.Join(sc.Root, ".alias"))
+	if err := e.svc.AddAgent(agent.Agent{ID: "alias", Name: "Alias", Project: ".alias/skills"}); err != nil {
+		t.Fatal(err)
+	}
+	e.enable(sc, "alpha", EnableOptions{Mode: Copy, Agents: []string{"alias"}})
+	if _, ok := e.lock().Copies[filepath.Join(sc.Root, ".alias", "skills", "alpha")]; !ok {
+		t.Fatalf("copies = %v", e.lock().Copies)
+	}
+
+	if _, err := e.svc.RemoveAgent("alias"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := e.lock().Copies[filepath.Join(sc.Root, ".agents", "skills", "alpha")]; !ok {
+		t.Errorf("copies = %v", e.lock().Copies)
+	}
+	st := e.status(sc)
+	if len(st.Enablements) != 1 || st.Enablements[0].Mode != Copy || len(st.Others) != 0 {
+		t.Errorf("status = %+v", st)
+	}
+}
+
 // Concurrent mutations from several services serialize on the lock file, so
 // no record is lost.
 func TestConcurrentMutations(t *testing.T) {

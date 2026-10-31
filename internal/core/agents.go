@@ -103,7 +103,11 @@ func (s *Service) RemoveAgent(id string) ([]string, error) {
 		var touched []string
 		for _, sc := range knownScopes(st.lock) {
 			for _, d := range agentDirs(st.agents, sc) {
-				if !slices.Equal(d.agents, []string{id}) {
+				if !slices.Contains(d.agents, id) {
+					continue
+				}
+				if len(d.agents) > 1 {
+					rekeyCopies(st, d, id, sc)
 					continue
 				}
 				placements, err := s.scanDir(st.lock, d)
@@ -151,11 +155,28 @@ func (s *Service) RemoveAgent(id string) ([]string, error) {
 	return removed, err
 }
 
-// Projects returns the known project roots.
-func (s *Service) Projects() ([]string, error) {
-	lock, err := store.LoadLock(s.paths.Lock)
-	if err != nil {
-		return nil, err
+// rekeyCopies moves the records of copies in the shared dir d that were
+// recorded through the spelling of agent id, which is being removed, to the
+// spelling of another agent sharing d, so that they stay managed.
+func rekeyCopies(st *state, d *agentDir, id string, sc Scope) {
+	var gone, keep string
+	for _, a := range st.agents {
+		if p, ok := dirFor(a, sc); ok && slices.Contains(d.agents, a.ID) {
+			switch {
+			case a.ID == id:
+				gone = p
+			case keep == "":
+				keep = p
+			}
+		}
 	}
-	return slices.Sorted(slices.Values(lock.Projects)), nil
+	if gone == keep {
+		return
+	}
+	for key, rec := range st.lock.Copies {
+		if filepath.Dir(key) == gone {
+			delete(st.lock.Copies, key)
+			st.lock.Copies[filepath.Join(keep, filepath.Base(key))] = rec
+		}
+	}
 }
