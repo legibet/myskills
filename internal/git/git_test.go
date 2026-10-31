@@ -333,40 +333,6 @@ func TestTracked(t *testing.T) {
 	}
 }
 
-func TestIgnored(t *testing.T) {
-	setup(t)
-	repo := newRepo(t)
-	commit(t, repo, ".gitignore", "/build/\n*.log\n")
-	if err := os.Mkdir(filepath.Join(repo, "build"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	tests := []struct {
-		path string
-		want bool
-	}{
-		{"build", true},
-		{"build/out", true},
-		{filepath.Join(repo, "x.log"), true},
-		{"sub/x.log", true},
-		{".agents/skills/tdd", false},
-		{"src/build", false},
-	}
-	for _, tt := range tests {
-		got, err := Ignored(repo, tt.path)
-		if err != nil || got != tt.want {
-			t.Errorf("Ignored(%q) = %v, %v; want %v", tt.path, got, err, tt.want)
-		}
-	}
-
-	if _, err := Ignored(repo, "../outside"); err == nil || errors.Is(err, ErrNotRepo) {
-		t.Errorf("Ignored outside the work tree: error = %v", err)
-	}
-	if _, err := Ignored(tempDir(t), "x"); !errors.Is(err, ErrNotRepo) {
-		t.Errorf("Ignored outside a repository: error = %v, want ErrNotRepo", err)
-	}
-}
-
 func TestMessage(t *testing.T) {
 	tests := []struct {
 		stderr, want string

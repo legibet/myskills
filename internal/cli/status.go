@@ -98,11 +98,16 @@ listed dimmed.`,
 				}
 				return a.printJSON(out)
 			}
+			lib, err := svc.Library()
+			if err != nil {
+				return err
+			}
+			dup := core.DuplicateNames(lib)
 			for i, st := range statuses {
 				if i > 0 {
 					a.println("")
 				}
-				a.printStatus(st)
+				a.printStatus(st, dup)
 			}
 			return nil
 		},
@@ -112,7 +117,9 @@ listed dimmed.`,
 	return cmd
 }
 
-func (a *app) printStatus(st core.Status) {
+// printStatus prints a scope's enablements, then its broken and unmanaged
+// entries. dup holds the names shown with their library path.
+func (a *app) printStatus(st core.Status, dup map[string]bool) {
 	if st.Scope.IsGlobal() {
 		a.println(bold("Global"))
 	} else {
@@ -126,7 +133,7 @@ func (a *app) printStatus(st core.Status) {
 	var rows [][]string
 	for _, e := range s.Enablements {
 		name := e.Name
-		if e.Skill != e.Name {
+		if dup[e.Name] {
 			name += " " + dim(e.Skill)
 		}
 		var flags []string

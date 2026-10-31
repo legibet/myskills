@@ -21,7 +21,7 @@ type skillJSON struct {
 	Description string      `json:"description"`
 	Dir         string      `json:"dir"`         // absolute directory
 	Source      *sourceJSON `json:"source"`      // null when the skill has no record
-	SourceLabel string      `json:"sourceLabel"` // "owner/repo", "linked ~/dir", "local", …
+	SourceLabel string      `json:"sourceLabel"` // "owner/repo", the linked folder ("~/agent-skills"), or "local"
 	Linked      bool        `json:"linked"`      // inside a linked library entry
 	Updatable   bool        `json:"updatable"`
 	Issue       string      `json:"issue,omitempty"` // why the skill is unusable
@@ -75,13 +75,14 @@ and issues: invalid skills, local modifications, missing linked folders.`,
 				return a.printJSON(out)
 			}
 			if len(lib) == 0 {
-				a.note("The library is empty. Add skills with 'myskills add <source>' or search with 'myskills find <query>'.")
+				a.note("The library is empty.")
 				return nil
 			}
+			dup := core.DuplicateNames(lib)
 			rows := [][]string{{bold("NAME"), bold("SOURCE"), bold("ENABLED"), bold("ISSUES")}}
 			for _, sk := range lib {
 				name := sk.Name
-				if sk.Path != sk.Name {
+				if dup[sk.Name] {
 					name += " " + dim(sk.Path)
 				}
 				where := whereEnabled(usage[sk.Path])

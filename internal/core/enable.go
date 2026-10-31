@@ -29,10 +29,10 @@ const (
 // Change is one placement touched by an operation.
 type Change struct {
 	Path    string
-	Agents  []string
+	Agents  []string // every agent whose skill directory holds the placement
 	Action  Action
 	Mode    Mode
-	Warning string // e.g. the copy is ignored by git and won't be committed
+	Warning string // e.g. a modified copy was not refreshed
 }
 
 // Result is the outcome of enabling or disabling one skill.
@@ -98,13 +98,6 @@ func (s *Service) Enable(sc Scope, sk Skill, opts EnableOptions) (Result, error)
 		if !sc.IsGlobal() {
 			res.Warnings = append(res.Warnings, s.syncExclude(st, sc.Root)...)
 		}
-		// Checked once the exclude block no longer lists links that became
-		// copies.
-		for i, c := range res.Changes {
-			if (c.Action == Copied || c.Action == Refreshed) && ignored(repo, realPath(c.Path)) {
-				res.Changes[i].Warning = "ignored by git; it won't be committed"
-			}
-		}
 		return err
 	})
 	return res, err
@@ -112,9 +105,8 @@ func (s *Service) Enable(sc Scope, sk Skill, opts EnableOptions) (Result, error)
 
 // target is an agent skill directory chosen for an enablement.
 type target struct {
-	dir    *agentDir
-	path   string   // the directory as configured for the first chosen agent
-	agents []string // the chosen agents using it
+	dir  *agentDir
+	path string // the directory as configured for the first chosen agent
 }
 
 // targets resolves the agent skill directories for an enablement (design §6
@@ -143,13 +135,9 @@ func targets(st *state, sc Scope, ids []string) ([]target, error) {
 			continue
 		}
 		d := dirs[slices.IndexFunc(dirs, func(d *agentDir) bool { return slices.Contains(d.agents, id) })]
-		if i := slices.IndexFunc(out, func(t target) bool { return t.dir == d }); i >= 0 {
-			if !slices.Contains(out[i].agents, id) {
-				out[i].agents = append(out[i].agents, id)
-			}
-			continue
+		if !slices.ContainsFunc(out, func(t target) bool { return t.dir == d }) {
+			out = append(out, target{dir: d, path: p})
 		}
-		out = append(out, target{dir: d, path: p, agents: []string{id}})
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("none of the agents %s has a %s skill directory; choose agents that have one",
@@ -305,18 +293,6 @@ func checkUntracked(repo, entry string) error {
 	return nil
 }
 
-// ignored reports whether git ignores the resolved entry path in repo.
-func ignored(repo, entry string) bool {
-	if repo == "" {
-		return false
-	}
-	if _, ok := within(repo, entry); !ok {
-		return false
-	}
-	ok, err := git.Ignored(repo, entry)
-	return err == nil && ok
-}
-
 // applySteps carries out planned steps in two phases. Each new entry (a link
 // or a full copy) is first prepared in a hidden work dir inside its agent dir,
 // so a copy that fails leaves every placement untouched; then each one is
@@ -384,7 +360,7 @@ func (s *Service) applySteps(st *state, sk Skill, steps []step) ([]Change, error
 				st.lock.Copies[stp.dest] = store.CopyRecord{Skill: sk.Path, Hash: stp.hash, LibraryHash: libHash, CopiedAt: now()}
 			}
 		}
-		changes = append(changes, Change{Path: stp.dest, Agents: stp.agents, Action: stp.action, Mode: stp.mode, Warning: stp.warning})
+		changes = append(changes, Change{Path: stp.dest, Agents: stp.dir.agents, Action: stp.action, Mode: stp.mode, Warning: stp.warning})
 	}
 	return changes, nil
 }
@@ -563,7 +539,7 @@ func (s *Service) RefreshCopies(sc Scope, paths []string, force bool) ([]Result,
 				errs = append(errs, errorf(ErrModified, "%s has local changes, so it was not refreshed; force overwrites them", tilde(p.Path)))
 				continue
 			}
-			t := target{dir: &agentDir{real: realPath(filepath.Dir(p.Path))}, path: filepath.Dir(p.Path), agents: p.Agents}
+			t := target{dir: &agentDir{real: realPath(filepath.Dir(p.Path)), agents: p.Agents}, path: filepath.Dir(p.Path)}
 			steps[p.Skill] = append(steps[p.Skill], step{target: t, dest: p.Path, action: Refreshed, mode: Copy, old: &p})
 		}
 		for i := range results {

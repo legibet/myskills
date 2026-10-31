@@ -221,7 +221,7 @@ func TestAddSingleSkill(t *testing.T) {
 	_, url := e.repo(map[string]string{"tdd": "skills/tdd"})
 
 	r := e.ok(e.home, "add", url)
-	contains(t, r.out, "✓ added tdd ("+e.path("src")+", skills/tdd)", "Enable with: myskills enable tdd")
+	contains(t, r.out, "✓ added tdd ("+e.path("src")+", skills/tdd)")
 	if !exists(filepath.Join(e.libDir("tdd"), "SKILL.md")) {
 		t.Fatal("tdd was not installed")
 	}
@@ -266,7 +266,7 @@ func TestAddAll(t *testing.T) {
 	commitAll(t, dir)
 
 	r := e.fails(e.home, "add", url, "--all")
-	contains(t, r.out, "✓ added alpha", "✓ added beta", "Enable with: myskills enable alpha beta")
+	contains(t, r.out, "✓ added alpha", "✓ added beta")
 	contains(t, r.err, "✗ broken can't be added:")
 }
 
@@ -287,8 +287,17 @@ func TestAddLocal(t *testing.T) {
 	if !isLink(t, e.libDir("collection")) {
 		t.Error("collection should be a link")
 	}
+	// "one" is both a copied skill and in the collection: only those rows
+	// show the library path. Linked skills show the folder as their source.
 	r = e.ok(e.home, "list")
-	contains(t, r.out, "collection/two", coll)
+	contains(t, r.out, "one one ", "one collection/one  "+coll, "two ")
+	if strings.Contains(r.out, "collection/two") {
+		t.Errorf("library path shown for a unique name:\n%s", r.out)
+	}
+	r = e.ok(e.home, "show", "one")
+	contains(t, r.out, "one one\n", "source   "+filepath.Join(coll, "one"))
+	r = e.ok(e.home, "show", "collection/two")
+	contains(t, r.out, "two\nThe two skill.", "source   "+coll)
 
 	_, url := e.repo(map[string]string{"x": "x"})
 	r = e.fails(e.home, "add", url, "--link")
@@ -374,7 +383,15 @@ func TestAmbiguousSkill(t *testing.T) {
 	}
 	r := e.fails(e.home, "show", "review")
 	contains(t, r.err, `"review" matches several skills: a/review, b/review`)
-	e.ok(e.home, "show", "a/review")
+	r = e.ok(e.home, "show", "a/review")
+	contains(t, r.out, "review a/review\n")
+
+	// A repeated name shows its library path.
+	r = e.ok(e.home, "list")
+	contains(t, r.out, "review a/review  "+e.path("a"), "review b/review  "+e.path("b"))
+	e.ok(e.home, "enable", "-g", "a/review")
+	r = e.ok(e.home, "status")
+	contains(t, r.out, "Global\n  review a/review  link")
 }
 
 func TestEnableDisableLink(t *testing.T) {
@@ -385,7 +402,7 @@ func TestEnableDisableLink(t *testing.T) {
 
 	r := e.ok(proj, "enable", "tdd")
 	contains(t, r.out,
-		"✓ linked tdd → .agents/skills/tdd (Universal)",
+		"✓ linked tdd → .agents/skills/tdd (Universal, Antigravity)",
 		"✓ linked tdd → .claude/skills/tdd (Claude Code)")
 	for _, p := range []string{".agents/skills/tdd", ".claude/skills/tdd"} {
 		if !isLink(t, filepath.Join(proj, p)) {
@@ -394,7 +411,7 @@ func TestEnableDisableLink(t *testing.T) {
 	}
 
 	r = e.ok(proj, "enable", "tdd")
-	contains(t, r.out, "✓ tdd already linked → .agents/skills/tdd (Universal)")
+	contains(t, r.out, "✓ tdd already linked → .agents/skills/tdd (Universal, Antigravity)")
 
 	r = e.ok(proj, "status")
 	contains(t, r.out, "Project "+proj, "  tdd  link  Universal, Antigravity, Claude Code", "Global\n  nothing enabled")
@@ -414,7 +431,7 @@ func TestEnableDisableLink(t *testing.T) {
 
 	// -C picks the project from another directory.
 	r = e.ok(e.home, "enable", "-C", filepath.Join(proj, ".agents"), "tdd", "-a", "universal")
-	contains(t, r.out, "✓ linked tdd → .agents/skills/tdd (Universal)")
+	contains(t, r.out, "✓ linked tdd → .agents/skills/tdd (Universal, Antigravity)")
 }
 
 func TestEnableCopyAndModified(t *testing.T) {
@@ -424,7 +441,7 @@ func TestEnableCopyAndModified(t *testing.T) {
 	proj := e.project()
 
 	r := e.ok(proj, "enable", "tdd", "--copy", "-a", "universal")
-	contains(t, r.out, "✓ copied tdd → .agents/skills/tdd (Universal)")
+	contains(t, r.out, "✓ copied tdd → .agents/skills/tdd (Universal, Antigravity)")
 	copyDir := filepath.Join(proj, ".agents/skills/tdd")
 	if isLink(t, copyDir) || !exists(filepath.Join(copyDir, "SKILL.md")) {
 		t.Fatal("not copied")
@@ -645,7 +662,7 @@ func TestCheckAndUpdate(t *testing.T) {
 	commitAll(t, src)
 
 	r = e.ok(proj, "check")
-	contains(t, r.out, "! tdd: update available ("+src+")", "1 update available, 1 up to date", "Install updates with: myskills update")
+	contains(t, r.out, "! tdd: update available ("+src+")", "1 update available, 1 up to date")
 
 	r = e.ok(proj, "check", "--json", "tdd")
 	checks := decode[checkJSON](t, r.out).Checks

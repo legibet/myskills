@@ -98,9 +98,6 @@ repository or local folder they were added from. Nothing is changed; use
 				}
 			}
 			a.note(fmt.Sprintf("Checked %s: %s.", plural(len(u.Checks), "skill"), strings.Join(parts, ", ")))
-			if count[core.Available] > 0 {
-				a.note("Install updates with: myskills update")
-			}
 			return nil
 		},
 	}

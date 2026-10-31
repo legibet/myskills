@@ -32,7 +32,9 @@ func TestEnableLinkInGitProject(t *testing.T) {
 		t.Fatalf("result = %+v", res)
 	}
 	for i, c := range res.Changes {
-		wantAgents := [][]string{{"universal"}, {"claude-code"}}[i]
+		// Every agent using a directory is reported, also the ones not
+		// requested: Antigravity shares .agents/skills with Universal.
+		wantAgents := [][]string{{"universal", "antigravity"}, {"claude-code"}}[i]
 		if c.Action != Linked || c.Mode != Link || !slices.Equal(c.Agents, wantAgents) || c.Warning != "" {
 			t.Errorf("change %+v", c)
 		}
@@ -173,35 +175,12 @@ func TestEnableLinkRefusedWhenTracked(t *testing.T) {
 	}
 }
 
-func TestEnableCopyIgnoredWarning(t *testing.T) {
-	e := setup(t)
-	sc := e.project("proj", true)
-	writeFile(t, filepath.Join(sc.Root, ".gitignore"), ".claude/\n")
-	commitAll(t, sc.Root, "ignore .claude")
-
-	res := e.enable(sc, "alpha", EnableOptions{Mode: Copy})
-	if len(res.Changes) != 2 {
-		t.Fatalf("changes = %+v", res.Changes)
-	}
-	if w := res.Changes[0].Warning; w != "" {
-		t.Errorf(".agents warning = %q", w)
-	}
-	if w := res.Changes[1].Warning; !strings.Contains(w, "ignored by git") {
-		t.Errorf(".claude warning = %q", w)
-	}
-	// Copies are committed content: nothing goes into the exclude block.
-	if strings.Contains(exclude(t, sc.Root), "alpha") {
-		t.Error("copy listed in exclude block")
-	}
-}
-
 func TestEnableConvertLinkAndCopy(t *testing.T) {
 	e := setup(t)
 	sc := e.project("proj", true)
 	e.enable(sc, "alpha", EnableOptions{})
 	paths := []string{filepath.Join(sc.Root, ".agents", "skills", "alpha"), filepath.Join(sc.Root, ".claude", "skills", "alpha")}
 
-	// No "ignored" warning from the exclude entries of the replaced links.
 	res := e.enable(sc, "alpha", EnableOptions{Mode: Copy})
 	for _, c := range res.Changes {
 		if c.Action != Copied || c.Mode != Copy || c.Warning != "" {
@@ -381,7 +360,7 @@ func TestParentSymlinkedAgentDirs(t *testing.T) {
 
 	res := e.enable(sc, "alpha", EnableOptions{})
 	place := filepath.Join(sc.Root, ".agents", "skills", "alpha")
-	if len(res.Changes) != 1 || res.Changes[0].Path != place || !slices.Equal(res.Changes[0].Agents, []string{"universal", "claude-code"}) {
+	if len(res.Changes) != 1 || res.Changes[0].Path != place || !slices.Equal(res.Changes[0].Agents, []string{"universal", "claude-code", "antigravity"}) {
 		t.Fatalf("changes = %+v", res.Changes)
 	}
 	st := e.status(sc)
@@ -421,7 +400,7 @@ func TestParentSymlinkedAgentDirMissing(t *testing.T) {
 	// .claude points at .agents, which does not exist yet.
 	symlink(t, ".agents", filepath.Join(sc.Root, ".claude"))
 	res := e.enable(sc, "alpha", EnableOptions{})
-	if len(res.Changes) != 1 || !slices.Equal(res.Changes[0].Agents, []string{"universal", "claude-code"}) ||
+	if len(res.Changes) != 1 || !slices.Equal(res.Changes[0].Agents, []string{"universal", "claude-code", "antigravity"}) ||
 		!isSymlink(filepath.Join(sc.Root, ".agents", "skills", "alpha")) {
 		t.Fatalf("changes = %+v", res.Changes)
 	}

@@ -208,6 +208,10 @@ A `-a` agent without a dir for the scope → error. Config agents without one ar
 Dirs are deduplicated by resolved path (parent symlinks resolved, e.g. `.claude/skills` →
 `.agents/skills`), first wins. An empty target list → error.
 
+A placement belongs to every known agent whose dir resolves to its dir. Results of enable,
+disable and copy refreshes list all of them, in agent order like status: a link made in
+`.agents/skills` for Universal is reported for Universal and Antigravity.
+
 ### Scope
 - `-g/--global` → global.
 - Else: start dir = `-C <dir>` or cwd; project root = `git rev-parse --show-toplevel` from the
@@ -223,8 +227,6 @@ Dirs are deduplicated by resolved path (parent symlinks resolved, e.g. `.claude/
 
 ### copy
 - Each target dir gets its own full copy (copy rules, §4), recorded in `lock.copies`.
-- Warning (not error) when the placement is ignored by git (`git check-ignore`): it won't be
-  committed.
 
 ### Git exclude (project scope in a git work tree)
 - Managed block in the file given by `git rev-parse --git-path info/exclude` (shared by all
@@ -299,7 +301,7 @@ that supports the scope lacks a placement.
 myskills                         TTY: TUI. Non-TTY: help.
 myskills find [query]            TTY: TUI Find view. Non-TTY: results (`--json`).
 myskills add <source>            §5
-myskills list | ls               library: name, library path, source, where enabled, issues (--json)
+myskills list | ls               library: name, source, where enabled, issues (--json)
 myskills show <skill>            metadata + rendered SKILL.md
 myskills path <skill>            absolute library path (exact bytes when piped)
 myskills remove | rm <skill>…    remove owning entries; disables their link placements in all
@@ -322,10 +324,15 @@ myskills --version
 ```
 
 - `<skill>` = library path or name; an ambiguous name errors with the candidates.
+- `list`, `status` and `show` name a skill by its name, followed (dim) by its library path
+  only when several library skills share that name. Source labels: `owner/repo` for git, the
+  linked folder (`~/agent-skills`) for skills in a linked entry, `local` otherwise; `show`
+  prints the folder of a local source instead of `local`.
 - Output: one line per item, `✓` / `!` / `✗` + dim details; colors follow the terminal
   (none when piped, `NO_COLOR` respected). `✓`/`!` lines to stdout, `✗` lines and hints to
   stderr. Exit 1 if any item failed or was skipped for local changes; warnings (e.g. `disable`
-  of a skill that is not enabled) keep exit 0.
+  of a skill that is not enabled) keep exit 0. Lines state what was done or found; next steps
+  are suggested only with errors and skipped items.
 - Untrusted text (skill metadata and markdown, skills.sh results, entry names found on disk,
   errors quoting them) never reaches the terminal as escape sequences: every printed line,
   spinner message and rendered markdown after Glamour (which decodes entities like `&#27;`)
@@ -410,7 +417,7 @@ main.go                cli.Execute()
 internal/
   skill/   validate, hash, discover, copy tree — filesystem only, no state
   source/  source spec parsing, labels and web URLs
-  git/     clone, ls-remote, rev-parse, ls-files, check-ignore, worktrees
+  git/     clone, ls-remote, rev-parse, ls-files, worktrees
   skillssh/ skills.sh search and download client
   sanitize/ untrusted text made safe for the terminal (keeps only SGR styling)
   agent/   Agent, built-ins, custom agent validation, dir per scope

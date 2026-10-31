@@ -123,18 +123,6 @@ func Tracked(root, path string) (bool, error) {
 	return out != "", nil
 }
 
-// Ignored reports whether path is ignored by the work tree rooted at root.
-func Ignored(root, path string) (bool, error) {
-	_, err := runIn(root, "check-ignore", "-q", "--", relTo(root, path))
-	if err == nil {
-		return true, nil
-	}
-	if re, ok := errors.AsType[*runError](err); ok && re.code == 1 {
-		return false, nil
-	}
-	return false, err
-}
-
 // relTo returns path relative to root, slash-separated, when path is
 // absolute; a relative path is taken as already relative to root.
 func relTo(root, path string) string {

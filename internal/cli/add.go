@@ -100,7 +100,6 @@ func (a *app) add(cmd *cobra.Command, input string, o addOptions) error {
 	if err != nil || len(picks) == 0 {
 		return err
 	}
-	var added []string
 	for _, r := range svc.Install(f, picks) {
 		switch {
 		case r.Err != nil:
@@ -109,11 +108,7 @@ func (a *app) add(cmd *cobra.Command, input string, o addOptions) error {
 			a.warn(fmt.Sprintf("%s is already in the library", r.Path) + dim(fmt.Sprintf(" (use 'myskills update %s' to update it)", r.Path)))
 		default:
 			a.ok("added " + r.Path + dim(" ("+candidateOrigin(f, r.Candidate)+")"))
-			added = append(added, r.Path)
 		}
-	}
-	if len(added) > 0 {
-		a.note("Enable with: myskills enable " + strings.Join(added, " "))
 	}
 	return nil
 }
@@ -135,7 +130,6 @@ func (a *app) addLink(cmd *cobra.Command, spec source.Spec, o addOptions) error 
 		return err
 	}
 	a.ok("linked " + name + " → " + tilde(spec.Path))
-	a.note("Enable with: myskills enable <skill>; see them with: myskills list")
 	return nil
 }
 

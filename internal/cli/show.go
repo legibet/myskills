@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 
+	"github.com/legibet/myskills/internal/core"
 	"github.com/legibet/myskills/internal/sanitize"
 	"github.com/legibet/myskills/internal/skill"
 )
@@ -33,13 +34,17 @@ its SKILL.md, rendered in a terminal and as plain markdown otherwise.`,
 			if err != nil {
 				return a.refError(args[0], err)
 			}
+			lib, err := svc.Library()
+			if err != nil {
+				return err
+			}
 			usage, err := svc.Usage()
 			if err != nil {
 				return err
 			}
 
 			title := bold(sk.Name)
-			if sk.Path != sk.Name {
+			if core.DuplicateNames(lib)[sk.Name] {
 				title += " " + dim(sk.Path)
 			}
 			a.println(title)
@@ -50,9 +55,13 @@ its SKILL.md, rendered in a terminal and as plain markdown otherwise.`,
 			if where == "" {
 				where = "not enabled"
 			}
+			src := sk.SourceLabel()
+			if r := sk.Record; r != nil && r.Source.Type == "local" {
+				src = tilde(r.Source.Path)
+			}
 			rows := [][]string{
 				{dim("path"), tilde(sk.Dir)},
-				{dim("source"), sk.SourceLabel()},
+				{dim("source"), src},
 				{dim("enabled"), where},
 			}
 			if sk.Issue != "" {
