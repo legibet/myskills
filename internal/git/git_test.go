@@ -1,0 +1,399 @@
+package git
+
+import (
+	"context"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"slices"
+	"strings"
+	"testing"
+)
+
+// setup isolates git from the user's configuration.
+func setup(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", home)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_AUTHOR_NAME", "Test")
+	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Test")
+	t.Setenv("GIT_COMMITTER_EMAIL", "test@example.com")
+}
+
+// tempDir returns a new temporary directory with symlinks resolved, so it
+// compares equal to the paths git prints.
+func tempDir(t *testing.T) string {
+	t.Helper()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// gitT runs git in dir and returns its trimmed output.
+func gitT(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func newRepo(t *testing.T) string {
+	t.Helper()
+	dir := tempDir(t)
+	gitT(t, dir, "init", "-q", "-b", "main")
+	return dir
+}
+
+// commit writes name with content in repo, commits it and returns the commit.
+func commit(t *testing.T, repo, name, content string) string {
+	t.Helper()
+	p := filepath.Join(repo, name)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, repo, "add", "--", name)
+	gitT(t, repo, "commit", "-q", "-m", name)
+	return gitT(t, repo, "rev-parse", "HEAD")
+}
+
+// remote is a repository with branches and tags pointing at distinct commits.
+type remote struct {
+	url                                   string
+	main, feature, myFeature, tagged, dup string
+}
+
+func newRemote(t *testing.T) remote {
+	t.Helper()
+	repo := newRepo(t)
+	r := remote{url: "file://" + filepath.ToSlash(repo)}
+	r.tagged = commit(t, repo, "a", "a")
+	gitT(t, repo, "tag", "light")
+	gitT(t, repo, "tag", "-a", "annotated", "-m", "annotated")
+	gitT(t, repo, "tag", "dup")
+	r.feature = commit(t, repo, "b", "b")
+	gitT(t, repo, "branch", "feature")
+	r.myFeature = commit(t, repo, "c", "c")
+	gitT(t, repo, "branch", "my-feature")
+	// Refs that ls-remote's tail matching also returns for "feature" and "HEAD".
+	gitT(t, repo, "branch", "nested/refs/heads/feature")
+	gitT(t, repo, "update-ref", "refs/remotes/origin/HEAD", "HEAD")
+	r.dup = commit(t, repo, "d", "d")
+	gitT(t, repo, "branch", "dup")
+	r.main = commit(t, repo, "e", "e")
+	return r
+}
+
+func TestRemoteCommit(t *testing.T) {
+	setup(t)
+	r := newRemote(t)
+	tests := []struct {
+		ref, want string
+	}{
+		{"", r.main},
+		{"main", r.main},
+		{"feature", r.feature},
+		{"my-feature", r.myFeature},
+		{"light", r.tagged},
+		{"annotated", r.tagged}, // peeled to the commit, not the tag object
+		{"dup", r.dup},          // the branch wins over the tag
+	}
+	for _, tt := range tests {
+		got, err := RemoteCommit(t.Context(), r.url, tt.ref)
+		if err != nil {
+			t.Errorf("RemoteCommit(%q): %v", tt.ref, err)
+			continue
+		}
+		if got != tt.want {
+			t.Errorf("RemoteCommit(%q) = %s, want %s", tt.ref, got, tt.want)
+		}
+	}
+
+	for _, ref := range []string{"missing", "eature", "heads/feature"} {
+		_, err := RemoteCommit(t.Context(), r.url, ref)
+		want := `ref "` + ref + `" not found in ` + r.url
+		if err == nil || err.Error() != want {
+			t.Errorf("RemoteCommit(%q) error = %v, want %q", ref, err, want)
+		}
+	}
+}
+
+func TestRemoteCommitEmptyRepo(t *testing.T) {
+	setup(t)
+	url := "file://" + filepath.ToSlash(newRepo(t))
+	_, err := RemoteCommit(t.Context(), url, "")
+	if err == nil || !strings.Contains(err.Error(), `ref "HEAD" not found`) {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestRemoteCommitMissingRepo(t *testing.T) {
+	setup(t)
+	url := "file://" + filepath.ToSlash(filepath.Join(tempDir(t), "missing"))
+	_, err := RemoteCommit(t.Context(), url, "")
+	if err == nil || !strings.HasPrefix(err.Error(), "git ls-remote "+url+": ") ||
+		!strings.Contains(err.Error(), "does not appear to be a git repository") {
+		t.Errorf("error = %v", err)
+	}
+}
+
+func TestClone(t *testing.T) {
+	setup(t)
+	r := newRemote(t)
+	tests := []struct {
+		ref, want, file string
+	}{
+		{"", r.main, "e"},
+		{"feature", r.feature, "b"},
+		{"annotated", r.tagged, "a"},
+		{"dup", r.dup, "d"},
+	}
+	for _, tt := range tests {
+		dir := filepath.Join(tempDir(t), "clone")
+		got, err := Clone(t.Context(), r.url, tt.ref, dir)
+		if err != nil {
+			t.Errorf("Clone(%q): %v", tt.ref, err)
+			continue
+		}
+		if got != tt.want {
+			t.Errorf("Clone(%q) = %s, want %s", tt.ref, got, tt.want)
+		}
+		if _, err := os.Stat(filepath.Join(dir, tt.file)); err != nil {
+			t.Errorf("Clone(%q): %v", tt.ref, err)
+		}
+		if n := gitT(t, dir, "rev-list", "--count", "HEAD"); n != "1" {
+			t.Errorf("Clone(%q): %s commits, want a shallow clone", tt.ref, n)
+		}
+	}
+}
+
+func TestCloneFailureRemovesDir(t *testing.T) {
+	setup(t)
+	r := newRemote(t)
+	dir := filepath.Join(tempDir(t), "clone")
+
+	_, err := Clone(t.Context(), r.url, "missing", dir)
+	if err == nil || err.Error() != "git clone "+r.url+": Remote branch missing not found in upstream origin" {
+		t.Errorf("error = %v", err)
+	}
+	if _, err := os.Lstat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("dir left behind: %v", err)
+	}
+
+	missing := "file://" + filepath.ToSlash(filepath.Join(tempDir(t), "missing"))
+	if _, err := Clone(t.Context(), missing, "", dir); err == nil {
+		t.Error("clone of a missing repository succeeded")
+	}
+	if _, err := os.Lstat(dir); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("dir left behind: %v", err)
+	}
+}
+
+func TestCloneCanceled(t *testing.T) {
+	setup(t)
+	r := newRemote(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	_, err := Clone(ctx, r.url, "", filepath.Join(tempDir(t), "clone"))
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("error = %v, want context.Canceled", err)
+	}
+}
+
+func TestNotInstalled(t *testing.T) {
+	t.Setenv("PATH", "")
+	if Available() {
+		t.Fatal("Available() = true with an empty PATH")
+	}
+	if _, err := RemoteCommit(t.Context(), "file:///x", ""); !errors.Is(err, ErrNotFound) {
+		t.Errorf("RemoteCommit error = %v, want ErrNotFound", err)
+	}
+	if _, err := Toplevel(t.TempDir()); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Toplevel error = %v, want ErrNotFound", err)
+	}
+}
+
+func TestToplevel(t *testing.T) {
+	setup(t)
+	repo := newRepo(t)
+	sub := filepath.Join(repo, "a", "b")
+	if err := os.MkdirAll(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{repo, sub} {
+		got, err := Toplevel(dir)
+		if err != nil || got != repo {
+			t.Errorf("Toplevel(%s) = %q, %v; want %q", dir, got, err, repo)
+		}
+	}
+
+	bare := tempDir(t)
+	gitT(t, bare, "init", "-q", "--bare")
+	for _, dir := range []string{tempDir(t), filepath.Join(repo, ".git"), bare} {
+		if _, err := Toplevel(dir); !errors.Is(err, ErrNotRepo) {
+			t.Errorf("Toplevel(%s) error = %v, want ErrNotRepo", dir, err)
+		}
+	}
+}
+
+func TestGitPathAndWorktrees(t *testing.T) {
+	setup(t)
+	repo := newRepo(t)
+	commit(t, repo, "a", "a")
+	sub := filepath.Join(repo, "sub")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(tempDir(t), "wt")
+	gitT(t, repo, "worktree", "add", "-q", "-b", "wt", wt)
+
+	exclude := filepath.Join(repo, ".git", "info", "exclude")
+	for _, dir := range []string{repo, sub, wt} {
+		got, err := GitPath(dir, "info/exclude")
+		if err != nil || got != exclude {
+			t.Errorf("GitPath(%s) = %q, %v; want %q", dir, got, err, exclude)
+		}
+	}
+	if _, err := GitPath(tempDir(t), "info/exclude"); !errors.Is(err, ErrNotRepo) {
+		t.Errorf("GitPath outside a repository: error = %v, want ErrNotRepo", err)
+	}
+
+	for _, dir := range []string{repo, wt} {
+		got, err := Worktrees(dir)
+		if err != nil || !slices.Equal(got, []string{repo, wt}) {
+			t.Errorf("Worktrees(%s) = %q, %v", dir, got, err)
+		}
+	}
+	if _, err := Worktrees(tempDir(t)); !errors.Is(err, ErrNotRepo) {
+		t.Errorf("Worktrees outside a repository: error = %v, want ErrNotRepo", err)
+	}
+}
+
+func TestWorktreesBare(t *testing.T) {
+	setup(t)
+	src := newRepo(t)
+	commit(t, src, "a", "a")
+	bare := filepath.Join(tempDir(t), "bare.git")
+	gitT(t, src, "clone", "-q", "--bare", src, bare)
+	wt := filepath.Join(tempDir(t), "wt")
+	gitT(t, bare, "worktree", "add", "-q", wt, "main")
+
+	got, err := Worktrees(wt)
+	if err != nil || !slices.Equal(got, []string{wt}) {
+		t.Errorf("Worktrees = %q, %v; want only %s", got, err, wt)
+	}
+}
+
+func TestTracked(t *testing.T) {
+	setup(t)
+	repo := newRepo(t)
+	commit(t, repo, ".agents/skills/tdd/SKILL.md", "x")
+	commit(t, repo, "g*/f", "x")
+	if err := os.Symlink("../.agents/skills/tdd", filepath.Join(repo, "link")); err != nil {
+		t.Fatal(err)
+	}
+	gitT(t, repo, "add", "link")
+	gitT(t, repo, "commit", "-q", "-m", "link")
+	if err := os.WriteFile(filepath.Join(repo, "untracked"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{".agents/skills/tdd", true},
+		{".agents/skills/tdd/SKILL.md", true},
+		{filepath.Join(repo, ".agents", "skills", "tdd"), true},
+		{".agents/skills/other", false},
+		{".agents/skills/td", false},
+		{"link", true},
+		{"untracked", false},
+		{"g*", true},
+		{"g*/f", true},
+		{"g?", false}, // pathspec magic is off: no glob matching
+		{"missing", false},
+	}
+	for _, tt := range tests {
+		got, err := Tracked(repo, tt.path)
+		if err != nil || got != tt.want {
+			t.Errorf("Tracked(%q) = %v, %v; want %v", tt.path, got, err, tt.want)
+		}
+	}
+
+	if _, err := Tracked(tempDir(t), "x"); !errors.Is(err, ErrNotRepo) {
+		t.Errorf("Tracked outside a repository: error = %v, want ErrNotRepo", err)
+	}
+}
+
+func TestIgnored(t *testing.T) {
+	setup(t)
+	repo := newRepo(t)
+	commit(t, repo, ".gitignore", "/build/\n*.log\n")
+	if err := os.Mkdir(filepath.Join(repo, "build"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		path string
+		want bool
+	}{
+		{"build", true},
+		{"build/out", true},
+		{filepath.Join(repo, "x.log"), true},
+		{"sub/x.log", true},
+		{".agents/skills/tdd", false},
+		{"src/build", false},
+	}
+	for _, tt := range tests {
+		got, err := Ignored(repo, tt.path)
+		if err != nil || got != tt.want {
+			t.Errorf("Ignored(%q) = %v, %v; want %v", tt.path, got, err, tt.want)
+		}
+	}
+
+	if _, err := Ignored(repo, "../outside"); err == nil || errors.Is(err, ErrNotRepo) {
+		t.Errorf("Ignored outside the work tree: error = %v", err)
+	}
+	if _, err := Ignored(tempDir(t), "x"); !errors.Is(err, ErrNotRepo) {
+		t.Errorf("Ignored outside a repository: error = %v, want ErrNotRepo", err)
+	}
+}
+
+func TestMessage(t *testing.T) {
+	tests := []struct {
+		stderr, want string
+	}{
+		{"", ""},
+		{"fatal: Remote branch x not found in upstream origin\n", "Remote branch x not found in upstream origin"},
+		{
+			"warning: Could not find remote branch x to clone.\nfatal: Remote branch x not found in upstream origin\n",
+			"Remote branch x not found in upstream origin",
+		},
+		{
+			"fatal: '/x' does not appear to be a git repository\nfatal: Could not read from remote repository.\n\nPlease make sure you have the correct access rights\nand the repository exists.\n",
+			"'/x' does not appear to be a git repository",
+		},
+		{
+			"git@github.com: Permission denied (publickey).\r\nfatal: Could not read from remote repository.\n\nPlease make sure…\n",
+			"git@github.com: Permission denied (publickey). Could not read from remote repository.",
+		},
+		{"hint: something\nerror: pathspec 'x' did not match\n", "pathspec 'x' did not match"},
+		{"something odd\nand more\n", "something odd"},
+	}
+	for _, tt := range tests {
+		if got := message(tt.stderr); got != tt.want {
+			t.Errorf("message(%q) = %q, want %q", tt.stderr, got, tt.want)
+		}
+	}
+}

@@ -3,7 +3,14 @@ package skillssh
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
+	"time"
 )
 
 // DefaultBaseURL is the skills.sh API origin.
@@ -17,7 +24,7 @@ type Client struct {
 
 // New returns a client for DefaultBaseURL with a sensible timeout.
 func New() *Client {
-	panic("not implemented")
+	return &Client{BaseURL: DefaultBaseURL, HTTP: &http.Client{Timeout: 15 * time.Second}}
 }
 
 // Result is one search hit.
@@ -31,10 +38,81 @@ type Result struct {
 
 // Search returns results for query in the order skills.sh ranks them.
 func (c *Client) Search(ctx context.Context, query string, limit int) ([]Result, error) {
-	panic("not implemented")
+	q := url.Values{"q": {query}, "limit": {strconv.Itoa(limit)}}
+	var body struct {
+		Skills []Result `json:"skills"`
+	}
+	if err := c.get(ctx, "/api/search?"+q.Encode(), &body); err != nil {
+		return nil, fmt.Errorf("skills.sh search: %w", err)
+	}
+	return body.Skills, nil
 }
 
 // SkillMarkdown returns the SKILL.md of a skill from the skills.sh snapshot.
 func (c *Client) SkillMarkdown(ctx context.Context, source, skillID string) (string, error) {
-	panic("not implemented")
+	owner, repo, ok := strings.Cut(source, "/")
+	if !ok || owner == "" || repo == "" || strings.Contains(repo, "/") || skillID == "" {
+		return "", fmt.Errorf("invalid skills.sh skill %q", source+"@"+skillID)
+	}
+	var body struct {
+		Files []struct {
+			Path     string `json:"path"`
+			Contents string `json:"contents"`
+		} `json:"files"`
+	}
+	p := "/api/download/" + url.PathEscape(owner) + "/" + url.PathEscape(repo) + "/" + url.PathEscape(skillID)
+	if err := c.get(ctx, p, &body); err != nil {
+		if se, ok := errors.AsType[*statusError](err); ok && se.code == http.StatusNotFound {
+			return "", errors.New("skill not available on skills.sh")
+		}
+		return "", fmt.Errorf("skills.sh download: %w", err)
+	}
+	found := -1
+	for i, f := range body.Files {
+		if f.Path == "SKILL.md" {
+			return f.Contents, nil
+		}
+		if found < 0 && strings.HasSuffix(f.Path, "/SKILL.md") {
+			found = i
+		}
+	}
+	if found < 0 {
+		return "", fmt.Errorf("skills.sh has no SKILL.md for %s@%s", source, skillID)
+	}
+	return body.Files[found].Contents, nil
+}
+
+// statusError is a non-2xx HTTP response.
+type statusError struct {
+	code   int
+	status string
+}
+
+func (e *statusError) Error() string { return e.status }
+
+// get fetches path (with query) from the API and decodes the JSON response
+// into v.
+func (c *Client) get(ctx context.Context, path string, v any) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(c.BaseURL, "/")+path, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "myskills")
+	req.Header.Set("Accept", "application/json")
+	client := c.HTTP
+	if client == nil {
+		client = http.DefaultClient
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return &statusError{code: resp.StatusCode, status: resp.Status}
+	}
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+	return nil
 }
