@@ -98,7 +98,9 @@ type Placement struct {
 	Kind     Kind
 	Skill    string // library path for link, copy and broken placements
 	Modified bool   // copy content differs from its record
-	Outdated bool   // copy record differs from the current library content
+	Outdated bool   // the library content changed since the copy was made
+
+	target string // a link's target as read, to recheck it before replacing it
 }
 
 // managed reports whether myskills made the placement.
@@ -333,6 +335,7 @@ func (s *Service) classify(lock *store.Lock, d *agentDir, name string) (Placemen
 		if err != nil {
 			return p, err
 		}
+		p.target = target
 		if !filepath.IsAbs(target) {
 			target = filepath.Join(d.real, target)
 		}
@@ -374,6 +377,9 @@ func (s *Service) libraryPath(target string) (string, bool) {
 
 // checkCopy sets Modified and Outdated on a copy placement. Unreadable
 // content counts as modified, so it is never deleted without force.
+//
+// Outdated compares the library with its content at copy time, not with the
+// copy: copying rewrites symlinks, so the two can differ when nothing changed.
 func (s *Service) checkCopy(lock *store.Lock, p *Placement) {
 	rec := lock.Copies[p.Path]
 	h, err := skill.Hash(p.Path)
@@ -381,7 +387,7 @@ func (s *Service) checkCopy(lock *store.Lock, p *Placement) {
 	lib := filepath.Join(s.paths.Skills, filepath.FromSlash(rec.Skill))
 	if _, err := os.Stat(lib); err == nil {
 		h, err := skill.Hash(lib)
-		p.Outdated = err == nil && h != rec.Hash
+		p.Outdated = err == nil && h != rec.LibraryHash
 	}
 }
 

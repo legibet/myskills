@@ -192,7 +192,7 @@ func TestLockRoundTrip(t *testing.T) {
 			"a&b": {Source: Source{Type: "local", Path: "/dev/a&b"}, Hash: "v1:bb", InstalledAt: at, UpdatedAt: at},
 		},
 		Copies: map[string]CopyRecord{
-			"/proj/.agents/skills/tdd": {Skill: "tdd", Hash: "v1:cc", CopiedAt: at},
+			"/proj/.agents/skills/tdd": {Skill: "tdd", Hash: "v1:cc", LibraryHash: "v1:dd", CopiedAt: at},
 		},
 		Projects: []string{"/z", "/a", "/z", "/m", "/a"},
 	}

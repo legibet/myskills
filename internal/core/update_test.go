@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/legibet/myskills/internal/skill"
+	"github.com/legibet/myskills/internal/store"
 )
 
 func (e *env) check(skills ...string) *Updates {
@@ -286,6 +287,77 @@ func TestUpdateFailedSwapRestores(t *testing.T) {
 		t.Errorf("record changed: %+v", after)
 	}
 	if l := leftovers(t, e.svc.paths.Skills); len(l) > 0 {
+		t.Errorf("leftovers: %v", l)
+	}
+}
+
+func TestUpdateStaleCheck(t *testing.T) {
+	e := newEnv(t)
+	dir, url := e.repo("src", map[string]string{"alpha": "alpha"})
+	e.add(url)
+	writeSkill(t, filepath.Join(dir, "alpha"), "alpha", "v2")
+	commitAll(t, dir, "v2")
+	stale := e.check("alpha")
+
+	// Another process updates to v3 after the check.
+	writeSkill(t, filepath.Join(dir, "alpha"), "alpha", "v3")
+	commitAll(t, dir, "v3")
+	if res := e.svc.ApplyUpdates(e.check("alpha"), nil, false); !res[0].Updated {
+		t.Fatalf("apply = %+v", res)
+	}
+	before := e.lock().Skills["alpha"]
+
+	for _, force := range []bool{false, true} {
+		res := e.svc.ApplyUpdates(stale, nil, force)
+		if res[0].Updated || res[0].Err == nil || !strings.Contains(res[0].Err.Error(), "changed since it was checked") {
+			t.Errorf("force %v: apply = %+v", force, res)
+		}
+	}
+	if !strings.Contains(readFile(t, filepath.Join(e.libDir("alpha"), "SKILL.md")), "v3") {
+		t.Error("v3 replaced by the stale check")
+	}
+	if after := e.lock().Skills["alpha"]; after != before {
+		t.Errorf("record changed: %+v", after)
+	}
+}
+
+func TestUpdateRefusesSymlinkOnTheWay(t *testing.T) {
+	e := newEnv(t)
+	dir, url := e.repo("src", map[string]string{"alpha": "alpha"})
+	e.add(url)
+	// alpha recorded inside a real collection.
+	mkdirAll(t, e.libDir("pack"))
+	if err := os.Rename(e.libDir("alpha"), e.libDir("pack/alpha")); err != nil {
+		t.Fatal(err)
+	}
+	lock := e.lock()
+	lock.Skills["pack/alpha"] = lock.Skills["alpha"]
+	delete(lock.Skills, "alpha")
+	if err := store.SaveLock(e.svc.paths.Lock, lock); err != nil {
+		t.Fatal(err)
+	}
+	writeSkill(t, filepath.Join(dir, "alpha"), "alpha", "v2")
+	commitAll(t, dir, "v2")
+	u := e.check("pack/alpha")
+	if u.Checks[0].State != Available {
+		t.Fatalf("check = %+v", u.Checks[0])
+	}
+
+	// The collection is replaced by a link to a folder outside the library.
+	outside := e.path("outside", "pack")
+	mkdirAll(t, filepath.Dir(outside))
+	if err := os.Rename(e.libDir("pack"), outside); err != nil {
+		t.Fatal(err)
+	}
+	symlink(t, outside, e.libDir("pack"))
+	res := e.svc.ApplyUpdates(u, nil, true)
+	if res[0].Updated || res[0].Err == nil || !strings.Contains(res[0].Err.Error(), "not a folder in the library") {
+		t.Fatalf("apply = %+v", res)
+	}
+	if got := readFile(t, filepath.Join(outside, "alpha", "SKILL.md")); !strings.Contains(got, "alpha body") {
+		t.Errorf("files behind the link changed: %q", got)
+	}
+	if l := leftovers(t, outside); len(l) > 0 {
 		t.Errorf("leftovers: %v", l)
 	}
 }

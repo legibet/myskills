@@ -221,8 +221,18 @@ func Installed(lib []Skill, url, name string) (Skill, bool) {
 	return Skill{}, false
 }
 
-// sameURL compares git URLs ignoring case, a trailing slash and ".git".
+// sameURL reports whether two git URLs name the same repository. GitHub https
+// URLs, the form every GitHub source is given (see source.Parse), compare
+// ignoring case, a trailing slash and ".git", as GitHub does; any other URL
+// must match exactly, since those can matter elsewhere (file paths, other hosts).
 func sameURL(a, b string) bool {
+	const github = "https://github.com/"
+	isGitHub := func(u string) bool {
+		return len(u) > len(github) && strings.EqualFold(u[:len(github)], github)
+	}
+	if !isGitHub(a) || !isGitHub(b) {
+		return a == b
+	}
 	norm := func(u string) string {
 		return strings.TrimSuffix(strings.TrimSuffix(strings.ToLower(u), "/"), ".git")
 	}

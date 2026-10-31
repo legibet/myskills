@@ -201,9 +201,10 @@ func TestEnableConvertLinkAndCopy(t *testing.T) {
 	e.enable(sc, "alpha", EnableOptions{})
 	paths := []string{filepath.Join(sc.Root, ".agents", "skills", "alpha"), filepath.Join(sc.Root, ".claude", "skills", "alpha")}
 
+	// No "ignored" warning from the exclude entries of the replaced links.
 	res := e.enable(sc, "alpha", EnableOptions{Mode: Copy})
 	for _, c := range res.Changes {
-		if c.Action != Copied || c.Mode != Copy {
+		if c.Action != Copied || c.Mode != Copy || c.Warning != "" {
 			t.Errorf("to copy: %+v", c)
 		}
 	}
@@ -447,14 +448,126 @@ func TestDisableBrokenByName(t *testing.T) {
 	wantErr(t, err, ErrNotFound)
 }
 
-func TestEnableReplacesBrokenLink(t *testing.T) {
+func TestEnableBrokenLinkOfAnotherSkill(t *testing.T) {
 	e := setup(t)
 	sc := e.project("proj", false)
 	place := filepath.Join(sc.Root, ".agents", "skills", "alpha")
 	symlink(t, e.libDir("old/alpha"), place)
+	_, err := e.svc.Enable(sc, e.skill("alpha"), EnableOptions{Agents: []string{"universal"}, Force: true})
+	wantErr(t, err, ErrConflict, "broken link to library skill old/alpha", "disable old/alpha")
+	if readlink(t, place) != e.libDir("old/alpha") {
+		t.Error("the broken link changed")
+	}
+
+	if _, err := e.svc.Disable(sc, "old/alpha", DisableOptions{}); err != nil {
+		t.Fatal(err)
+	}
 	res := e.enable(sc, "alpha", EnableOptions{Agents: []string{"universal"}})
 	if res.Changes[0].Action != Linked || readlink(t, place) != e.libDir("alpha") {
 		t.Errorf("changes = %+v", res.Changes)
+	}
+}
+
+func TestEnableRechecksPlacementsBeforeReplacing(t *testing.T) {
+	tests := []struct {
+		name   string
+		before Mode // how alpha is enabled first; "" for not at all
+		mode   Mode
+		change func(e *env, place string)
+		kept   func(e *env, place string) bool
+		kind   error
+	}{
+		{
+			"new", "", Link,
+			func(e *env, place string) { writeSkill(e.t, place, "alpha", "mine") },
+			func(e *env, place string) bool {
+				return strings.Contains(readFile(e.t, filepath.Join(place, "SKILL.md")), "mine")
+			},
+			ErrConflict,
+		},
+		{
+			"link", Link, Copy,
+			func(e *env, place string) {
+				if err := os.Remove(place); err != nil {
+					e.t.Fatal(err)
+				}
+				symlink(e.t, e.libDir("beta"), place)
+			},
+			func(e *env, place string) bool { return isSymlink(place) && readlink(e.t, place) == e.libDir("beta") },
+			ErrConflict,
+		},
+		{
+			"copy", Copy, Link,
+			func(e *env, place string) { writeFile(e.t, filepath.Join(place, "notes.md"), "mine") },
+			func(_ *env, place string) bool { return isRealDir(place) && exists(filepath.Join(place, "notes.md")) },
+			ErrModified,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := setup(t)
+			sc := e.project("proj", false)
+			if tt.before != "" {
+				e.enable(sc, "alpha", EnableOptions{Mode: tt.before})
+			}
+			first := filepath.Join(sc.Root, ".agents", "skills", "alpha")
+			second := filepath.Join(sc.Root, ".claude", "skills", "alpha")
+			// The second placement changes while the first one is swapped in.
+			rename = func(from, to string) error {
+				if to == first {
+					tt.change(e, second)
+				}
+				return os.Rename(from, to)
+			}
+			defer func() { rename = os.Rename }()
+
+			res, err := e.svc.Enable(sc, e.skill("alpha"), EnableOptions{Mode: tt.mode})
+			wantErr(t, err, tt.kind, ".claude/skills/alpha", "left in place")
+			if !slices.Equal(changePaths(res.Changes), []string{first}) {
+				t.Errorf("changes = %+v", res.Changes)
+			}
+			if !tt.kept(e, second) {
+				t.Error("the changed placement was replaced")
+			}
+		})
+	}
+}
+
+func TestEnableCopyInsideItsLinkedSource(t *testing.T) {
+	e := newEnv(t)
+	// A skill under development at the root of its repository.
+	sc := e.project("dev-skill", true)
+	writeSkill(t, sc.Root, "dev-skill", "")
+	if _, err := e.svc.LinkLocal(sc.Root); err != nil {
+		t.Fatal(err)
+	}
+	_, err := e.svc.Enable(sc, e.skill("dev-skill"), EnableOptions{Mode: Copy})
+	if err == nil || !strings.Contains(err.Error(), "into itself") {
+		t.Fatalf("err = %v", err)
+	}
+	dirs := []string{filepath.Join(sc.Root, ".agents", "skills"), filepath.Join(sc.Root, ".claude", "skills")}
+	if l := leftovers(t, dirs...); len(l) > 0 {
+		t.Errorf("staging left behind: %v", l)
+	}
+}
+
+func TestCopyOutdatedAgainstLibraryContent(t *testing.T) {
+	e := setup(t)
+	sc := e.project("proj", false)
+	writeFile(t, filepath.Join(e.libDir("alpha"), "x"), "x")
+	symlink(t, "./x", filepath.Join(e.libDir("alpha"), "link"))
+	e.enable(sc, "alpha", EnableOptions{Mode: Copy, Agents: []string{"universal"}})
+	// Copying normalizes the link, so the copy hashes differently from the library.
+	if got := readlink(t, filepath.Join(sc.Root, ".agents", "skills", "alpha", "link")); got != "x" {
+		t.Fatalf("copied link → %q", got)
+	}
+	if p := e.status(sc).Enablements[0].Placements[0]; p.Outdated || p.Modified {
+		t.Errorf("right after enabling: %+v", p)
+	}
+
+	writeFile(t, filepath.Join(e.libDir("alpha"), "x"), "x v2")
+	if p := e.status(sc).Enablements[0].Placements[0]; !p.Outdated || p.Modified {
+		t.Errorf("after a library change: %+v", p)
 	}
 }
 

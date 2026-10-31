@@ -236,4 +236,20 @@ func TestCopyDestination(t *testing.T) {
 	if err == nil || !strings.HasSuffix(err.Error(), "is not a directory") {
 		t.Errorf("file src: got %v", err)
 	}
+
+	// dst must not be inside src, even through a symlink: the copy would
+	// contain itself.
+	nested := filepath.Join(src, ".agents", "skills", "skill")
+	if err := os.MkdirAll(filepath.Dir(nested), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(tempDir(t), "link")
+	symlink(t, src, link)
+	for _, inside := range []string{nested, filepath.Join(link, "copy")} {
+		err := Copy(src, inside, src)
+		if err == nil || !strings.Contains(err.Error(), "into itself") {
+			t.Errorf("dst %s: got %v", inside, err)
+		}
+		assertNotExist(t, inside)
+	}
 }

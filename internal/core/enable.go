@@ -98,6 +98,13 @@ func (s *Service) Enable(sc Scope, sk Skill, opts EnableOptions) (Result, error)
 		if !sc.IsGlobal() {
 			res.Warnings = append(res.Warnings, s.syncExclude(st, sc.Root)...)
 		}
+		// Checked once the exclude block no longer lists links that became
+		// copies.
+		for i, c := range res.Changes {
+			if (c.Action == Copied || c.Action == Refreshed) && ignored(repo, realPath(c.Path)) {
+				res.Changes[i].Warning = "ignored by git; it won't be committed"
+			}
+		}
 		return err
 	})
 	return res, err
@@ -206,8 +213,10 @@ func (s *Service) planEnable(st *state, sk Skill, tgts []target, mode Mode, opts
 			// Existing placements of the skill change only when a mode is
 			// asked for: Link or Copy converts, Copy also refreshes.
 			switch {
-			case p.Kind == KindBroken:
+			case p.Kind == KindBroken && p.Skill == sk.Path:
 				stp.old = &p
+			case p.Kind == KindBroken:
+				return nil, errorf(ErrConflict, "%s is a broken link to library skill %s; disable %s or move it away to enable %s there", tilde(stp.dest), p.Skill, p.Skill, sk.Path)
 			case p.Kind == KindLink && p.Skill == sk.Path:
 				if opts.Mode == Copy {
 					stp.old = &p
@@ -233,14 +242,9 @@ func (s *Service) planEnable(st *state, sk Skill, tgts []target, mode Mode, opts
 				return nil, errorf(ErrConflict, "%s already exists (%s); move it away to enable %s there", tilde(stp.dest), occupant(p), sk.Path)
 			}
 		}
-		if stp.action != Unchanged {
-			entry := filepath.Join(t.dir.real, sk.Name)
-			if mode == Link {
-				if err := checkUntracked(repo, entry); err != nil {
-					return nil, err
-				}
-			} else if ignored(repo, entry) {
-				stp.warning = "ignored by git; it won't be committed"
+		if stp.action != Unchanged && mode == Link {
+			if err := checkUntracked(repo, filepath.Join(t.dir.real, sk.Name)); err != nil {
+				return nil, err
 			}
 		}
 		steps = append(steps, stp)
@@ -316,7 +320,7 @@ func ignored(repo, entry string) bool {
 // applySteps carries out planned steps in two phases. Each new entry (a link
 // or a full copy) is first prepared in a hidden work dir inside its agent dir,
 // so a copy that fails leaves every placement untouched; then each one is
-// swapped into place and recorded.
+// rechecked, swapped into place and recorded.
 func (s *Service) applySteps(st *state, sk Skill, steps []step) ([]Change, error) {
 	var works []string
 	defer func() {
@@ -326,6 +330,7 @@ func (s *Service) applySteps(st *state, sk Skill, steps []step) ([]Change, error
 	}()
 	src := realPath(sk.Dir)
 	boundary := realPath(filepath.Join(s.paths.Skills, sk.Entry))
+	libHash := "" // the library content the copies are made from
 	for i := range steps {
 		stp := &steps[i]
 		if stp.action == Unchanged {
@@ -343,11 +348,22 @@ func (s *Service) applySteps(st *state, sk Skill, steps []step) ([]Change, error
 		works = append(works, work)
 		stp.stage = filepath.Join(work, filepath.Base(stp.dest))
 		if stp.mode == Link {
-			err = symlinkDir(sk.Dir, stp.stage)
-		} else if err = skill.Copy(src, stp.stage, boundary); err == nil {
-			stp.hash, err = skill.Hash(stp.stage)
+			if err := symlinkDir(sk.Dir, stp.stage); err != nil {
+				return nil, err
+			}
+			continue
 		}
-		if err != nil {
+		// Hashed before copying, so that a library change made meanwhile
+		// shows the copy as outdated.
+		if libHash == "" {
+			if libHash, err = skill.Hash(src); err != nil {
+				return nil, err
+			}
+		}
+		if err := skill.Copy(src, stp.stage, boundary); err != nil {
+			return nil, err
+		}
+		if stp.hash, err = skill.Hash(stp.stage); err != nil {
 			return nil, err
 		}
 	}
@@ -355,6 +371,9 @@ func (s *Service) applySteps(st *state, sk Skill, steps []step) ([]Change, error
 	var changes []Change
 	for _, stp := range steps {
 		if stp.action != Unchanged {
+			if err := recheck(st.lock, stp); err != nil {
+				return changes, err
+			}
 			if err := swapIn(stp.stage, stp.dest); err != nil {
 				return changes, err
 			}
@@ -362,12 +381,37 @@ func (s *Service) applySteps(st *state, sk Skill, steps []step) ([]Change, error
 				delete(st.lock.Copies, stp.old.Path)
 			}
 			if stp.mode == Copy {
-				st.lock.Copies[stp.dest] = store.CopyRecord{Skill: sk.Path, Hash: stp.hash, CopiedAt: now()}
+				st.lock.Copies[stp.dest] = store.CopyRecord{Skill: sk.Path, Hash: stp.hash, LibraryHash: libHash, CopiedAt: now()}
 			}
 		}
 		changes = append(changes, Change{Path: stp.dest, Agents: stp.agents, Action: stp.action, Mode: stp.mode, Warning: stp.warning})
 	}
 	return changes, nil
+}
+
+// recheck checks that the placement path of a step still holds what planning
+// found there, right before it is replaced: preparing copies takes time, in
+// which an editor or agent may have changed it.
+func recheck(lock *store.Lock, stp step) error {
+	switch {
+	case stp.old == nil:
+		_, err := os.Lstat(stp.dest)
+		if err == nil {
+			return errorf(ErrConflict, "%s was created while myskills was working; left in place", tilde(stp.dest))
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			return err
+		}
+	case stp.old.Kind == KindLink || stp.old.Kind == KindBroken:
+		if target, err := os.Readlink(stp.dest); err != nil || target != stp.old.target {
+			return errorf(ErrConflict, "%s changed while myskills was working; left in place", tilde(stp.dest))
+		}
+	case stp.old.Kind == KindCopy && !stp.old.Modified: // a modified copy is discarded by force
+		if h, err := skill.Hash(stp.dest); err != nil || h != lock.Copies[stp.old.Path].Hash {
+			return errorf(ErrModified, "%s changed while myskills was working; left in place", tilde(stp.dest))
+		}
+	}
+	return nil
 }
 
 // DisableOptions controls Disable.

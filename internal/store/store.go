@@ -159,9 +159,10 @@ type SkillRecord struct {
 
 // CopyRecord describes a copy placement.
 type CopyRecord struct {
-	Skill    string    `json:"skill"` // library path
-	Hash     string    `json:"hash"`
-	CopiedAt time.Time `json:"copiedAt"`
+	Skill       string    `json:"skill"`       // library path
+	Hash        string    `json:"hash"`        // content of the copy when made
+	LibraryHash string    `json:"libraryHash"` // content of the library skill it was copied from
+	CopiedAt    time.Time `json:"copiedAt"`
 }
 
 // Lock is lock.json.

@@ -290,16 +290,20 @@ func (s *Service) ApplyUpdates(u *Updates, paths []string, force bool) []UpdateR
 
 // applyUpdate replaces one library skill with its checked upstream content.
 func (s *Service) applyUpdate(lock *store.Lock, c UpdateCheck, force bool) error {
+	// Another process may have updated it since: the check is then stale.
 	rec, ok := lock.Skills[c.Skill.Path]
-	if !ok || rec.Source != c.Skill.Record.Source {
+	old := c.Skill.Record
+	if !ok || rec.Source != old.Source || rec.Hash != old.Hash || rec.Commit != old.Commit {
 		return fmt.Errorf("%s changed since it was checked; check again", c.Skill.Path)
 	}
+	// A symlink anywhere on the way would make the update write outside the
+	// library.
 	dest := filepath.Join(s.paths.Skills, filepath.FromSlash(c.Skill.Path))
-	info, err := os.Lstat(dest)
+	info, err := os.Stat(dest)
 	if err != nil {
 		return err
 	}
-	if isLink(info) || !info.IsDir() {
+	if !info.IsDir() || realPath(dest) != filepath.Join(realPath(s.paths.Skills), filepath.FromSlash(c.Skill.Path)) {
 		return fmt.Errorf("%s is not a folder in the library; not updated", c.Skill.Path)
 	}
 	if h, err := skill.Hash(dest); (err != nil || h != rec.Hash) && !force {

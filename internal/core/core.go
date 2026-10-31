@@ -4,13 +4,11 @@
 package core
 
 import (
-	"bytes"
 	"crypto/rand"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -181,19 +179,6 @@ func isLink(info fs.FileInfo) bool {
 		return true
 	}
 	return runtime.GOOS == "windows" && info.Mode()&fs.ModeIrregular != 0
-}
-
-// symlinkDir creates link pointing at the directory target: a symlink, or on
-// Windows a junction, which needs no special privileges.
-func symlinkDir(target, link string) error {
-	if runtime.GOOS != "windows" {
-		return os.Symlink(target, link)
-	}
-	out, err := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("mklink /J %s %s: %w: %s", link, target, err, bytes.TrimSpace(out))
-	}
-	return nil
 }
 
 // rename is os.Rename; tests replace it to simulate a failed swap.

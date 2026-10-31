@@ -9,9 +9,10 @@ import (
 )
 
 // Copy copies the skill directory src to dst, which must not exist (its parent
-// must). boundary is the root of the source the skill came from: symlinks that
-// leave src but stay inside boundary are dereferenced; other escaping, absolute
-// or broken symlinks fail the copy (design §4). dst is removed on failure.
+// must) and must not lie inside src. boundary is the root of the source the
+// skill came from: symlinks that leave src but stay inside boundary are
+// dereferenced; other escaping, absolute or broken symlinks fail the copy
+// (design §4). dst is removed on failure.
 //
 // Symlinks that resolve inside src are recreated as relative symlinks. Regular
 // files keep their permission bits; .git and .DS_Store are skipped.
@@ -37,6 +38,18 @@ func Copy(src, dst, boundary string) error {
 	}
 	if !info.IsDir() {
 		return fmt.Errorf("%s is not a directory", src)
+	}
+	dstAbs, err := filepath.Abs(dst)
+	if err != nil {
+		return err
+	}
+	parentReal, err := filepath.EvalSymlinks(filepath.Dir(dstAbs))
+	if err != nil {
+		return err
+	}
+	if within(srcReal, parentReal) {
+		// The copy would contain itself, recursing until paths get too long.
+		return fmt.Errorf("can't copy %s into itself", src)
 	}
 
 	if err := os.Mkdir(dst, 0o755); err != nil {

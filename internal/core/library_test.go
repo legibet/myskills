@@ -516,15 +516,53 @@ func TestInstalled(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	upper := strings.ToUpper(url[:7]) + url[7:] + ".git"
-	if sk, ok := Installed(lib, upper, "alpha"); !ok || sk.Path != "alpha" {
-		t.Errorf("Installed(%s) = %+v, %v", upper, sk, ok)
+	if sk, ok := Installed(lib, url, "alpha"); !ok || sk.Path != "alpha" {
+		t.Errorf("Installed(%s) = %+v, %v", url, sk, ok)
 	}
 	if _, ok := Installed(lib, url, "beta"); ok {
 		t.Error("Installed found beta")
 	}
-	if _, ok := Installed(lib, "file:///elsewhere", "alpha"); ok {
-		t.Error("Installed matched another url")
+	upper := url[:len(url)-3] + strings.ToUpper(url[len(url)-3:])
+	for _, other := range []string{url + ".git", upper, "file:///elsewhere"} {
+		if _, ok := Installed(lib, other, "alpha"); ok {
+			t.Errorf("Installed matched %s", other)
+		}
+	}
+}
+
+func TestSameURL(t *testing.T) {
+	parsed := func(spec string) string {
+		t.Helper()
+		sp, err := source.Parse(spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return sp.URL
+	}
+	// Records and skills.sh results use this form.
+	github := "https://github.com/Owner/Repo.git"
+	for _, u := range []string{
+		parsed("owner/repo"),
+		parsed("OWNER/repo@tdd"),
+		parsed("https://github.com/owner/repo/tree/main/skills"),
+		parsed("www.github.com/owner/repo.git"),
+		"https://github.com/owner/repo/",
+		"HTTPS://GitHub.com/owner/repo",
+	} {
+		if !sameURL(github, u) {
+			t.Errorf("sameURL(%s, %s) = false", github, u)
+		}
+	}
+	for _, pair := range [][2]string{
+		{"file:///x/source", "file:///x/source.git"},
+		{"file:///x/Source", "file:///x/source"},
+		{"https://gitlab.com/g/r.git", "https://gitlab.com/G/R.git"},
+		{"git@github.com:owner/repo.git", github},
+		{"https://github.com/owner/other.git", github},
+	} {
+		if sameURL(pair[0], pair[1]) {
+			t.Errorf("sameURL(%s, %s) = true", pair[0], pair[1])
+		}
 	}
 }
 
