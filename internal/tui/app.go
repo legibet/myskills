@@ -46,6 +46,7 @@ type app struct {
 	keys  skillsKeys
 	fkeys filterKeys
 	rkeys readerKeys
+	qkeys queryKeys
 	nkeys findKeys
 
 	view      View
@@ -74,6 +75,7 @@ type snapshot struct {
 	status map[core.Scope]core.Status
 	dirs   map[core.Scope][]core.AgentDir // agent skill directories, grouped by resolved location
 	usage  map[string][]core.Scope
+	dups   map[string]bool // names more than one library skill has
 	config store.Config
 	agents []agent.Agent
 	err    error
@@ -91,6 +93,7 @@ func newApp(ctx context.Context, svc service, opts Options) *app {
 		keys:      newSkillsKeys(),
 		fkeys:     newFilterKeys(),
 		rkeys:     newReaderKeys(),
+		qkeys:     newQueryKeys(),
 		nkeys:     newFindKeys(),
 		view:      opts.View,
 		scope:     opts.Scope,
@@ -145,6 +148,8 @@ func (a *app) update(msg tea.Msg) tea.Cmd {
 	case tea.WindowSizeMsg:
 		a.width, a.height = msg.Width, msg.Height
 		a.help.SetWidth(msg.Width - 2)
+	case tea.FocusMsg:
+		return a.reload()
 	case tea.BackgroundColorMsg:
 		a.applyTheme(newTheme(msg.IsDark()))
 	case tea.KeyPressMsg:
@@ -169,6 +174,10 @@ func (a *app) update(msg tea.Msg) tea.Cmd {
 		return a.finish(msg)
 	case docMsg:
 		a.pv.handle(msg)
+	case docsChangedMsg:
+		for _, k := range msg.keys {
+			a.pv.invalidate(k)
+		}
 	case openedMsg:
 		if msg.err != nil {
 			return a.setStatus(stError, "Couldn't open the browser: "+msg.err.Error())
@@ -207,7 +216,8 @@ func (a *app) paste(msg tea.PasteMsg) tea.Cmd {
 	case a.modal != nil || a.reading:
 		return nil
 	case a.view == Find:
-		return a.findInput(msg)
+		cmd := a.typeQuery()
+		return tea.Batch(cmd, a.findInput(msg))
 	case a.sk.filtering:
 		return a.filterInput(msg)
 	}
@@ -306,6 +316,7 @@ func (a *app) load() tea.Cmd {
 		if s.lib, err = svc.Library(); err != nil {
 			errs = append(errs, err)
 		}
+		s.dups = core.DuplicateNames(s.lib)
 		for _, sc := range scopes {
 			st, err := svc.Status(sc)
 			if err != nil {
@@ -366,7 +377,6 @@ type outcome struct {
 	lines    []string // changes made, for the status line and the summary
 	warnings []string
 	note     string // status text when nothing changed
-	hint     string // appended to the status line on success
 	path     string // library path of the skill an install added or found
 	err      error
 }
@@ -458,11 +468,7 @@ func (a *app) finish(msg doneMsg) tea.Cmd {
 	case len(out.warnings) > 0:
 		cmds = append(cmds, a.setStatus(stWarn, strings.Join(append(out.lines, out.warnings...), " · ")))
 	case len(out.lines) > 0:
-		text := strings.Join(out.lines, " · ")
-		if out.hint != "" {
-			text += " · " + out.hint
-		}
-		cmds = append(cmds, a.setStatus(stSuccess, text))
+		cmds = append(cmds, a.setStatus(stSuccess, strings.Join(out.lines, " · ")))
 	case out.note != "":
 		cmds = append(cmds, a.setStatus(stInfo, out.note))
 	}
@@ -553,6 +559,7 @@ func (a *app) layout() layout {
 func (a *app) View() tea.View {
 	v := tea.NewView(sanitize.Styled(a.render()))
 	v.AltScreen = true
+	v.ReportFocus = true // reload when the terminal comes back into focus
 	v.WindowTitle = "myskills"
 	return v
 }
@@ -574,7 +581,7 @@ func (a *app) render() string {
 		a.bodyView(l),
 		rule,
 		a.statusView(),
-		" " + a.helpView(),
+		" " + indent(a.helpView()),
 	}, "\n")
 	if a.modal != nil {
 		box := a.modal.view(t, a.width)
@@ -700,16 +707,38 @@ func (a *app) statusView() string {
 	return " " + truncate(s, a.width-2)
 }
 
+// helpView is the help bar: the keys that work now, or all keys while the
+// full help is shown.
 func (a *app) helpView() string {
+	w := a.width - 2
 	switch {
 	case a.reading:
-		return a.help.ShortHelpView(a.rkeys.ShortHelp())
+		return fitHelp(a.help, w, a.rkeys.ShortHelp())
+	case a.view == Find && a.fd.typing:
+		return fitHelp(a.help, w, a.qkeys.ShortHelp())
+	case a.view == Find && a.help.ShowAll:
+		return a.help.FullHelpView(a.nkeys.FullHelp())
 	case a.view == Find:
-		return a.help.ShortHelpView(a.nkeys.ShortHelp())
+		return fitHelp(a.help, w, a.nkeys.ShortHelp(), a.nkeys.Help)
 	case a.sk.filtering:
-		return a.help.ShortHelpView(a.fkeys.ShortHelp())
+		return fitHelp(a.help, w, a.fkeys.ShortHelp())
+	case a.help.ShowAll:
+		return a.help.FullHelpView(a.keys.FullHelp())
 	}
-	return a.help.View(a.keys)
+	return fitHelp(a.help, w, a.keys.ShortHelp(), a.keys.Help)
+}
+
+// fitHelp renders the enabled bindings that fit on a line of w cells, in
+// order, followed by the pinned ones (the help key), which always show.
+func fitHelp(h help.Model, w int, bindings []key.Binding, pinned ...key.Binding) string {
+	h.SetWidth(0) // fitting is done here, by dropping whole bindings
+	enabled := slices.DeleteFunc(slices.Clone(bindings), func(b key.Binding) bool { return !b.Enabled() })
+	for n := len(enabled); ; n-- {
+		s := h.ShortHelpView(append(enabled[:n:n], pinned...))
+		if n == 0 || lipgloss.Width(s) <= w {
+			return s
+		}
+	}
 }
 
 // centered places a block in the middle of the body area.

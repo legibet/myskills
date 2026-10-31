@@ -16,10 +16,15 @@ import (
 // FileName is the file that makes a directory a skill.
 const FileName = "SKILL.md"
 
-// Metadata is the validated frontmatter of a skill.
+// Metadata is the validated frontmatter of a skill. Optional fields are empty
+// when absent.
 type Metadata struct {
-	Name        string
-	Description string
+	Name          string
+	Description   string
+	License       string
+	Compatibility string
+	AllowedTools  string            // "allowed-tools"
+	Metadata      map[string]string // "metadata"
 }
 
 // Read parses and validates dir/SKILL.md (design §4). The frontmatter name must
@@ -43,7 +48,7 @@ func ReadFile(path string) (Metadata, error) {
 	if err != nil {
 		return Metadata{}, err
 	}
-	m, err := parse(data)
+	m, err := Parse(data)
 	if err != nil {
 		return Metadata{}, fmt.Errorf("%s: %w", FileName, err)
 	}
@@ -98,7 +103,8 @@ func splitFrontmatter(s string) (front, body string, err error) {
 	return "", "", errors.New(`frontmatter is not closed by a "---" line`)
 }
 
-func parse(data []byte) (Metadata, error) {
+// Parse parses and validates the frontmatter of SKILL.md content (design §4).
+func Parse(data []byte) (Metadata, error) {
 	if !utf8.Valid(data) {
 		return Metadata{}, errors.New("not valid UTF-8")
 	}
@@ -148,17 +154,18 @@ func parse(data []byte) (Metadata, error) {
 		return Metadata{}, fmt.Errorf("description must be at most 1024 characters, got %d", n)
 	}
 
-	for _, key := range []string{"license", "allowed-tools"} {
-		if _, err := field(fields, key, false); err != nil {
-			return Metadata{}, err
-		}
+	m := Metadata{Name: name, Description: desc}
+	if m.License, err = field(fields, "license", false); err != nil {
+		return Metadata{}, err
+	}
+	if m.AllowedTools, err = field(fields, "allowed-tools", false); err != nil {
+		return Metadata{}, err
 	}
 	if v, ok := fields["compatibility"]; ok {
-		s, err := stringValue("compatibility", v)
-		if err != nil {
+		if m.Compatibility, err = stringValue("compatibility", v); err != nil {
 			return Metadata{}, err
 		}
-		if n := utf8.RuneCountInString(s); n < 1 || n > 500 {
+		if n := utf8.RuneCountInString(m.Compatibility); n < 1 || n > 500 {
 			return Metadata{}, fmt.Errorf("compatibility must be 1-500 characters, got %d", n)
 		}
 	}
@@ -171,13 +178,17 @@ func parse(data []byte) (Metadata, error) {
 			if k.Kind != yaml.ScalarNode || k.ShortTag() != "!!str" {
 				return Metadata{}, fmt.Errorf("metadata key %q must be a string, got %s", k.Value, kind(k))
 			}
-			if _, err := stringValue("metadata."+k.Value, v.Content[i+1]); err != nil {
+			s, err := stringValue("metadata."+k.Value, v.Content[i+1])
+			if err != nil {
 				return Metadata{}, err
 			}
+			if m.Metadata == nil {
+				m.Metadata = map[string]string{}
+			}
+			m.Metadata[k.Value] = s
 		}
 	}
-
-	return Metadata{Name: name, Description: desc}, nil
+	return m, nil
 }
 
 // field returns the string value of a top-level frontmatter field.

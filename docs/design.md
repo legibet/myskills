@@ -332,7 +332,7 @@ myskills --version
   (none when piped, `NO_COLOR` respected). `✓`/`!` lines to stdout, `✗` lines and hints to
   stderr. Exit 1 if any item failed or was skipped for local changes; warnings (e.g. `disable`
   of a skill that is not enabled) keep exit 0. Lines state what was done or found; next steps
-  are suggested only with errors and skipped items.
+  are suggested only with errors, skipped items and an empty library.
 - Untrusted text (skill metadata and markdown, skills.sh results, entry names found on disk,
   errors quoting them) never reaches the terminal as escape sequences: every printed line,
   spinner message and rendered markdown after Glamour (which decodes entities like `&#27;`)
@@ -349,35 +349,49 @@ changes made is printed to the normal screen.
 ```
  myskills   Skills · Find                     ▸ project ~/projects/foo     global: 3
  ──────────────────────────────────────────────────────────────────────────────────
- All  Enabled  Issues          / filter    │ swiftui-expert-skill
- ● swiftui-expert-skill   link     global  │ avdlee/swiftui-agent-skill
- ◆ tdd                    copy  outdated   │ link · Universal, Claude Code
- ○ macos-design-guidelines                 │ ────────────────────────────────
- ○ review          agent-skills · linked   │ Write, review, or improve SwiftUI…
- …                                         │ (rendered SKILL.md, scrollable)
+ All 4   Enabled 2   Issues 0  / filter    │ swiftui-expert-skill
+▌● swiftui-expert-skill  avdlee/…    link  │ avdlee/swiftui-agent-skill
+ ◆ tdd  mattpocock/skills  outdated  copy  │ ● link · Universal, Antigravity, Claude Code
+ ○ write  tw93/Waza                global  │ ────────────────────────────────────────────
+ ○ review  ~/agent-skills                  │ Enabled in ~/projects/foo, ~/opcode
+ …                                         │ Write, review, or improve SwiftUI…
+                                           │ (frontmatter fields, rendered SKILL.md)
  ──────────────────────────────────────────────────────────────────────────────────
- ✓ Enabled tdd as copy in Universal, Claude Code
- space link  c copy  a agents  s scope  u update  x remove  / filter  ? help
+ ✓ Enabled tdd (copy) in Universal, Antigravity, Claude Code
+ space link  c copy  enter read  / filter  f find  u update  a agents  s scope  ? help
 ```
 
-- Layout: list + preview at ≥ 100 columns; narrower: list only. `enter` opens the preview full
-  screen (in both layouts), `esc` returns. Resizes live.
+- Layout: list + preview at ≥ 100 columns; narrower: list only. `enter`/`l`/`→` opens the
+  preview full screen (in both layouts), `esc`/`h`/`←` returns. Resizes live.
 - Header: the active scope is prominent; the other scope is summarized (e.g. `global: 3`).
   `s` switches scope (only when a project is available).
+- Preview: name, source (`show`'s source line, §8), state in the active scope; notes (invalid,
+  broken, conflicts, local changes, outdated copies, update check); `Enabled in <scopes>`;
+  then SKILL.md: the description and the optional frontmatter fields that are set (license,
+  compatibility, allowed-tools, metadata entries), and the rendered body. Find and the add
+  picker preview SKILL.md the same way.
+- Help bar: the keys that work for the highlighted row, in priority order, as many as fit the
+  width, always ending with `? help`. `?` shows the full help; `?` or `esc` closes it.
+- Status lines and preview notes state what happened or what is; keys are left to the help bar.
 
 Skills view
-- Rows: every library skill. Glyph for the active scope: `●` link, `◆` copy, `◐` mixed or
-  partial, `○` off, `✗` broken/conflict. Badges: `global` (enabled globally while viewing a
-  project), `outdated`, `modified`, `update`, `invalid`, `linked`.
+- Rows: every library skill: glyph, name, source label (§8; the library path only for a name
+  several skills share), flags (`outdated`, `modified`, `update`, `invalid`) and a right
+  column saying how the skill is enabled in the active scope: `link`, `copy`, `mixed`, or
+  `global` for a project that gets it only from the global scope; `broken`, `conflict` or
+  `unmanaged` when something is wrong. Glyph for the active scope: `●` link, `◆` copy, `◐`
+  mixed or partial, `○` off, `✗` broken/conflict.
 - `space`: off → enable as link (default agents); enabled → disable.
 - `c`: off → enable as copy; link or mixed → convert to copies; copy → convert to links.
 - `a`: per-skill agent checklist for the active scope (toggle placements per agent). Agents
   sharing a skill directory are one item, since they share its placement.
 - `A`: default agents preference (writes config).
-- `r`: check updates (async; header spinner). `u`: update the highlighted skill: the library
-  update, then the copy refresh of each scope. Each step asks before discarding its own local
-  changes, and confirming forces only that step.
-- `x`: remove from library (modal confirm). `e`: edit SKILL.md in `$VISUAL`/`$EDITOR`.
+- `u`: update the highlighted skill: the library update, then the copy refresh of each scope.
+  Each step asks before discarding its own local changes, and confirming forces only that
+  step. `U`: check every updatable skill for updates (async; header spinner).
+- `r`: reload the library, the scopes and changed SKILL.md files from disk; also done when the
+  terminal regains focus.
+- `d`/`x`: remove from library (modal confirm). `e`: edit SKILL.md in `$VISUAL`/`$EDITOR`.
 - `/`: fuzzy filter; `tab`/`shift+tab` cycle All/Enabled/Issues. Issues lists invalid skills,
   broken and conflicting placements, modified copies, and unmanaged (`other`) entries; `space`
   removes a broken link, unmanaged entries are never touched.
@@ -385,16 +399,24 @@ Skills view
 - Empty library: a friendly empty state pointing to Find and `myskills add`.
 - Destructive actions (removing a copy, `ErrModified`) open a confirm modal.
 
-Find view (`f` from Skills, `esc` back; `myskills find` opens here)
-- The input is always focused. Text that parses as an explicit source (URL, `owner/repo`
-  with a slash, a path) shows a single row "Browse <source>" instead of search results:
-  `enter` fetches it and lists its skills (preview from local files).
+Find view (`f` from Skills; `myskills find` opens here)
+- Two focuses. The query input takes every key but `enter` (search now, or browse a source),
+  `↓` (to the results) and `esc` (to the results, or back to Skills when there are none); it
+  has the focus when Find opens, unless `myskills find <query>` gave one. The list: `↑↓`/`jk`
+  move (`↑` on the first row and `/` edit the query), `enter`/`l`/`→` read full screen,
+  `space` add, `o` open in the browser, `r` retry, `esc` back to Skills.
+- Text that parses as an explicit source (URL, `owner/repo` with a slash, a path) shows a
+  single row "Browse <source>": `enter` fetches it and lists its skills (preview from local
+  files); `h`/`←`/`esc` go back to the search results.
 - Otherwise a debounced skills.sh search (≈250 ms, ≥ 2 chars); stale responses are dropped by
-  request id; errors show inline with retry (`ctrl+r`).
-- Rows: name, `owner/repo`, installs (`12.3K`), `✓ in library`.
-- `enter`: add the highlighted skill to the library (row spinner → `✓ added`). Adding never
-  enables; the status line hints how to enable. `ctrl+o`: open the source in the browser (the
-  repository for a search result, which carries no path within it).
+  request id; errors show inline.
+- Rows: name, `owner/repo`, state (`✓ in library`, `✓ added`, `✗ conflict`, `✗ invalid`) and
+  the installs (`12.3K`) at the right edge, where they line up; when the row does not fit,
+  the installs are dropped first.
+- `space` asks `Add <skill> to the library?` with the git URL it downloads from (or the local
+  folder), then adds it (row spinner → `✓ added`). A skill already in the library, or whose
+  name the library has from another source, is reported instead. Adding never enables.
+  `o` opens the repository page (a search result carries no path within it).
 
 Add picker (`myskills add <source>` with several candidates): checklist + preview,
 `space` toggle, `ctrl+a` all, `enter` install, `esc` cancel.
@@ -408,7 +430,6 @@ Behavior rules
   checkouts of browsed sources are removed.
 - One palette with light/dark variants chosen from the terminal background, one accent color,
   muted secondary text, semantic success/warning/error. No Nerd Font glyphs.
-- Help bar from `bubbles/help`; `?` shows full help.
 
 ## 10. Architecture
 

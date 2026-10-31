@@ -9,7 +9,6 @@ import (
 
 	"github.com/legibet/myskills/internal/agent"
 	"github.com/legibet/myskills/internal/core"
-	"github.com/legibet/myskills/internal/skill"
 	"github.com/legibet/myskills/internal/skillssh"
 	"github.com/legibet/myskills/internal/source"
 	"github.com/legibet/myskills/internal/store"
@@ -90,7 +89,7 @@ func (s liveService) SkillMarkdown(ctx context.Context, source, skillID string) 
 // Indirections that model tests replace: reading SKILL.md, timers and the
 // browser.
 var (
-	readBody = skill.Body
-	tick     = tea.Tick
-	openURL  = openBrowser
+	readSkill = readSkillFile
+	tick      = tea.Tick
+	openURL   = openBrowser
 )

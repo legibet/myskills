@@ -77,7 +77,6 @@ func (p *picker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		p.width, p.height = msg.Width, msg.Height
-		p.help.SetWidth(msg.Width - 2)
 	case tea.BackgroundColorMsg:
 		p.applyTheme(newTheme(msg.IsDark()))
 	case tea.KeyPressMsg:
@@ -247,7 +246,7 @@ func (p *picker) render() string {
 		body,
 		rule,
 		" " + truncate(status, p.width-2),
-		" " + p.help.View(p.keys),
+		" " + fitHelp(p.help, p.width-2, p.keys.ShortHelp()),
 	}, "\n")
 }
 

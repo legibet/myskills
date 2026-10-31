@@ -99,7 +99,7 @@ func TestPickToggleAndPreview(t *testing.T) {
 	}
 	drivePicker(p, "up")
 	v := stripView(p.View().Content)
-	for _, want := range []string{"1 selected", "[✓] one", "First.", "Body of /c/one"} {
+	for _, want := range []string{"1 selected", "[✓] one", "About one.", "Body of /c/one"} {
 		if !strings.Contains(v, want) {
 			t.Errorf("view lacks %q:\n%s", want, v)
 		}

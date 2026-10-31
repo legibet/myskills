@@ -255,7 +255,7 @@ func (a *app) syncSkillsKeys() {
 	valid := isSkill && r.skill.Valid()
 
 	k.Scope.SetEnabled(a.opts.Project != nil)
-	k.Check.SetEnabled(!a.sk.checking && slices.ContainsFunc(a.data.lib, core.Skill.Updatable))
+	k.CheckAll.SetEnabled(!a.sk.checking && slices.ContainsFunc(a.data.lib, core.Skill.Updatable))
 	k.Read.SetEnabled(ok)
 	k.Agents.SetEnabled(valid)
 	k.Update.SetEnabled(isSkill && (r.skill.Updatable() || len(a.outdatedCopies(r.skill.Path)) > 0))
@@ -292,6 +292,10 @@ func (a *app) skillsKey(msg tea.KeyPressMsg) tea.Cmd {
 	k := a.keys
 	n := len(a.sk.rows)
 	page := max(1, a.layout().bodyH-2)
+	if a.help.ShowAll && msg.String() == "esc" {
+		a.help.ShowAll = false
+		return nil
+	}
 	switch {
 	case key.Matches(msg, k.Quit):
 		return a.quit()
@@ -328,8 +332,10 @@ func (a *app) skillsKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 	case key.Matches(msg, k.Defaults):
 		a.defaultsModal()
-	case key.Matches(msg, k.Check):
+	case key.Matches(msg, k.CheckAll):
 		return a.checkUpdates()
+	case key.Matches(msg, k.Reload):
+		return a.reload()
 	case key.Matches(msg, k.ScrollDown):
 		a.pv.vp.HalfPageDown()
 	case key.Matches(msg, k.ScrollUp):
@@ -763,6 +769,13 @@ func applyUpdate(ctx context.Context, svc service, sk core.Skill, force bool) ou
 	return out
 }
 
+// reload is r, and runs when the terminal comes back into focus: read the
+// library, the scopes and the shown SKILL.md files again, since they may
+// have changed outside the app.
+func (a *app) reload() tea.Cmd {
+	return tea.Batch(a.load(), a.pv.recheckLocal())
+}
+
 type checkProgressMsg struct {
 	done, total int
 	ch          <-chan checkProgressMsg
@@ -861,7 +874,7 @@ func (a *app) updateSkills(msg tea.Msg) (tea.Cmd, bool) {
 		}
 		var parts []string
 		if avail > 0 {
-			parts = append(parts, plural(avail, "update", "updates")+" available · u installs one")
+			parts = append(parts, plural(avail, "update", "updates")+" available")
 		}
 		if gone > 0 {
 			parts = append(parts, strconv.Itoa(gone)+" removed upstream")
@@ -1076,13 +1089,9 @@ func (a *app) skillsPlaceholder(l layout) (string, bool) {
 }
 
 func (a *app) skillsListView(w, h int) string {
-	t := a.th
 	lines := []string{a.tabsLine(w)}
 	if len(a.sk.rows) == 0 {
 		lines = append(lines, "", " "+a.emptyTabText())
-		if a.sk.tab == tabEnabled && a.sk.filter.Value() == "" {
-			lines = append(lines, " "+t.hint.Render("space on a skill enables it"))
-		}
 		return strings.Join(lines, "\n")
 	}
 	start, end := a.sk.list.window(len(a.sk.rows), h-1)
@@ -1162,11 +1171,13 @@ func (a *app) skillRow(r row, w int, selected bool) string {
 		{text: " "},
 		{text: sanitize.Line(r.name()), style: nameStyle, hl: r.hl, hlStyle: nameStyle.Foreground(t.accent)},
 	}
-	switch {
-	case r.entry != nil:
+	if r.entry != nil {
 		left = append(left, seg{text: "  " + strings.Join(a.namesOf(r.entry.Agents), ", "), style: t.hint})
-	case path.Dir(r.skill.Path) != ".":
-		left = append(left, seg{text: "  " + sanitize.Line(path.Dir(r.skill.Path)), style: t.hint})
+	} else {
+		if dir := path.Dir(r.skill.Path); dir != "." && a.data.dups[r.skill.Name] {
+			left = append(left, seg{text: "  " + sanitize.Line(dir), style: t.hint})
+		}
+		left = append(left, seg{text: "  " + sanitize.Line(r.skill.SourceLabel()), style: t.hint})
 	}
 
 	var right []seg
@@ -1203,7 +1214,9 @@ func (a *app) glyph(r row) (string, lipgloss.Style) {
 	return "○", t.hint
 }
 
-// stateWord is the right column: the mode, or what is wrong.
+// stateWord is the right column: how the skill is enabled in the active
+// scope (its mode, or "global" when a project uses it only from the global
+// scope), or what is wrong.
 func (a *app) stateWord(r row) (string, lipgloss.Style) {
 	t := a.th
 	switch {
@@ -1215,6 +1228,8 @@ func (a *app) stateWord(r row) (string, lipgloss.Style) {
 		return string(r.en.Mode), t.dim
 	case len(r.others) > 0:
 		return "conflict", t.bad
+	case r.global:
+		return "global", t.dim
 	}
 	return "", t.dim
 }
@@ -1226,9 +1241,6 @@ func (a *app) badges(r row) []seg {
 	t := a.th
 	var out []seg
 	add := func(text string, st lipgloss.Style) { out = append(out, seg{text: text, style: st}) }
-	if r.global {
-		add("global", t.accented)
-	}
 	if r.en != nil && slices.ContainsFunc(r.en.Placements, func(p core.Placement) bool { return p.Outdated }) {
 		add("outdated", t.warn)
 	}
@@ -1240,9 +1252,6 @@ func (a *app) badges(r row) []seg {
 	}
 	if !r.skill.Valid() {
 		add("invalid", t.bad)
-	}
-	if r.skill.Linked {
-		add("linked", t.dim)
 	}
 	return out
 }
@@ -1259,21 +1268,21 @@ func (a *app) skillPreview(w int) (item string, header []string, intro string, d
 	}
 	sk := r.skill
 	title := t.bold.Render(sanitize.Line(sk.Name))
-	if dir := path.Dir(sk.Path); dir != "." {
+	if dir := path.Dir(sk.Path); dir != "." && a.data.dups[sk.Name] {
 		title += "  " + t.hint.Render(sanitize.Line(dir))
 	}
-	header = []string{
-		title,
-		t.dim.Render(sanitize.Line(sk.SourceLabel())),
-		a.stateLine(r),
+	from := sanitize.Line(sk.SourceLabel())
+	if sk.Record != nil && sk.Record.Source.Type == "local" {
+		from = tildePath(sk.Record.Source.Path)
 	}
+	header = []string{title, t.dim.Render(from), a.stateLine(r)}
 	var notes []string
 	note := func(st lipgloss.Style, s string) { notes = append(notes, wrapText(st.Render(s), w)) }
 	if sk.Issue != "" {
-		note(t.bad, "✗ Invalid: "+sanitize.Line(sk.Issue)+". Fix SKILL.md (e) to enable it.")
+		note(t.bad, "✗ Invalid: "+sanitize.Line(sk.Issue)+".")
 	}
 	for _, p := range r.broken {
-		note(t.bad, "✗ Broken link "+a.placeLabel(p)+": the library folder is missing. space removes it.")
+		note(t.bad, "✗ Broken link "+a.placeLabel(p)+": the library folder is missing.")
 	}
 	for _, p := range r.others {
 		note(t.bad, "✗ "+a.placeLabel(p)+" is not managed by myskills; enabling for "+
@@ -1285,34 +1294,25 @@ func (a *app) skillPreview(w int) (item string, header []string, intro string, d
 				note(t.warn, "! Local changes in "+a.placeLabel(p))
 			}
 			if p.Outdated {
-				note(t.warn, "! "+a.placeLabel(p)+" is older than the library. u refreshes it.")
+				note(t.warn, "! "+a.placeLabel(p)+" is older than the library.")
 			}
 		}
 	}
 	if sk.Modified {
-		note(t.warn, "! Changed since it was added. Updating asks before replacing your changes.")
+		note(t.warn, "! Changed since it was added.")
 	}
 	switch c := a.sk.updates[sk.Path]; c.State {
 	case core.Available:
-		note(t.accented, "↑ Update available. u installs it.")
+		note(t.accented, "↑ Update available.")
 	case core.RemovedUpstream:
 		note(t.warn, "! Removed upstream.")
 	case core.CheckFailed:
 		note(t.bad, "✗ Update check failed: "+sanitize.Line(fmt.Sprint(c.Err)))
 	}
-	var also []core.Scope
-	for _, sc := range a.data.usage[sk.Path] {
-		if sc != a.scope {
-			also = append(also, sc)
-		}
-	}
-	if len(also) > 0 {
-		note(t.dim, "Also enabled in "+scopeList(also))
+	if scopes := a.data.usage[sk.Path]; len(scopes) > 0 {
+		note(t.dim, "Enabled in "+scopeList(scopes))
 	}
 	intro = strings.Join(notes, "\n")
-	if desc := sanitize.Line(sk.Description); desc != "" {
-		intro = joinBlocks(intro, wrapText(desc, w))
-	}
 	dd := dirDoc(sk.Dir)
 	return sk.Path, header, intro, &dd
 }
@@ -1346,7 +1346,7 @@ func (a *app) entryPreview(r row, w int) (item string, header []string, intro st
 	header = []string{t.bold.Render(sanitize.Line(p.Name)), t.dim.Render(a.placeLabel(*p))}
 	if p.Kind == core.KindBroken {
 		header = append(header, t.bad.Render("✗ broken link")+t.hint.Render(" · ")+t.dim.Render(agents))
-		intro = wrapText("This link points to "+sanitize.Line(p.Skill)+" in the library, which no longer exists. space removes the link.", w)
+		intro = wrapText("This link points to "+sanitize.Line(p.Skill)+" in the library, which no longer exists.", w)
 		return r.key(), header, intro, nil
 	}
 	header = append(header, t.hint.Render("◇ unmanaged · ")+t.dim.Render(agents))

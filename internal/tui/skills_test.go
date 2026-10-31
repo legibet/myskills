@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/legibet/myskills/internal/agent"
@@ -63,16 +64,20 @@ func TestSkillsGlyphsAndBadges(t *testing.T) {
 		return ""
 	}
 	for name, want := range map[string][]string{
-		"tdd":    {"● tdd", "link"},
-		"notes":  {"◐ notes", "modified", "copy"},
-		"review": {"○ review", "agent-skills", "global", "linked"},
-		"broken": {"○ broken", "invalid"},
+		"tdd":    {"● tdd  acme/tdd", "link"},
+		"notes":  {"◐ notes  acme/notes", "modified", "copy"},
+		"review": {"○ review  /home/agent-skills", "global"}, // enabled only globally
+		"broken": {"○ broken  local", "invalid"},
 	} {
 		line := find(name)
 		for _, w := range want {
 			if !strings.Contains(line, w) {
 				t.Errorf("row %s = %q, want %q", name, line, w)
 			}
+		}
+		// The library path shows only for names that repeat.
+		if strings.Contains(line, "agent-skills/") || strings.Contains(line, "linked") {
+			t.Errorf("row %s = %q", name, line)
 		}
 	}
 }
@@ -356,7 +361,7 @@ func TestCheckAndUpdate(t *testing.T) {
 		{Skill: f.lib[1], State: core.UpToDate},
 	}
 	h := newHarness(t, f, projectOptions(), 120, 30)
-	h.press("r")
+	h.press("U")
 	if got := h.svc.called("CheckUpdates"); !slices.Equal(got, []string{"CheckUpdates [notes tdd]"}) {
 		t.Fatalf("calls = %v", got)
 	}
@@ -409,21 +414,23 @@ func TestEmptyLibrary(t *testing.T) {
 
 func TestNarrowLayoutOpensPreview(t *testing.T) {
 	h := newHarness(t, libraryFixture(), projectOptions(), 80, 24)
-	h.lacks("│", "Test-driven development.")
+	h.lacks("│", "About tdd.")
 	h.cursorTo("tdd")
-	h.press("enter")
-	if !h.a.reading {
-		t.Fatal("enter should open the preview")
-	}
-	h.contains("Test-driven development.", "Body of /lib/tdd", "esc back")
-	h.press("esc")
-	if h.a.reading {
-		t.Fatal("esc should close the preview")
+	for _, keys := range [][2]string{{"enter", "esc"}, {"l", "h"}, {"right", "left"}} {
+		h.press(keys[0])
+		if !h.a.reading {
+			t.Fatalf("%s should open the preview", keys[0])
+		}
+		h.contains("About tdd.", "Body of /lib/tdd", "esc back")
+		h.press(keys[1])
+		if h.a.reading {
+			t.Fatalf("%s should close the preview", keys[1])
+		}
 	}
 
 	// Growing the terminal brings the preview next to the list.
 	h.send(windowSize(130, 30))
-	h.contains("│", "Test-driven development.")
+	h.contains("│", "About tdd.")
 }
 
 func TestViewFitsAnySize(t *testing.T) {
@@ -671,5 +678,51 @@ func TestUpdateReportsUpToDateOnlyWhenNothingChanged(t *testing.T) {
 	h.contains("tdd is up to date")
 	if got := f.called("ApplyUpdates"); len(got) != 0 {
 		t.Fatalf("calls = %v", got)
+	}
+}
+
+func TestHelpBarAndFullHelp(t *testing.T) {
+	h := newHarness(t, libraryFixture(), projectOptions(), 60, 24)
+	lines := strings.Split(h.view(), "\n")
+	if bar := lines[len(lines)-1]; !strings.HasSuffix(strings.TrimRight(bar, " "), "? help") || strings.Contains(bar, "…") {
+		t.Fatalf("help bar = %q", bar)
+	}
+
+	h.send(windowSize(120, 30))
+	h.press("?")
+	help := strings.Split(h.a.helpView(), "\n")
+	lines = strings.Split(h.view(), "\n")
+	for _, l := range lines[len(lines)-len(help):] {
+		if !strings.HasPrefix(l, " ") || strings.HasPrefix(l, "  ") {
+			t.Errorf("full help line not aligned: %q", l)
+		}
+	}
+	h.press("esc")
+	if h.a.help.ShowAll || h.quit {
+		t.Fatal("esc should close the help")
+	}
+}
+
+func TestReloadReadsChangedFiles(t *testing.T) {
+	h := newHarness(t, libraryFixture(), projectOptions(), 120, 30)
+	h.cursorTo("tdd")
+	h.contains("About tdd.")
+	read := readSkill
+	t.Cleanup(func() { readSkill = read })
+	readSkill = func(dir string) (string, error) {
+		if dir == "/lib/tdd" {
+			return "---\nname: tdd\ndescription: Changed outside.\n---\n# New body", nil
+		}
+		return read(dir)
+	}
+	h.svc.lib[3].Description = "Changed outside."
+	h.press("r")
+	h.contains("Changed outside.", "New body")
+
+	// Coming back into focus reloads too.
+	h.svc.lib = h.svc.lib[:3]
+	h.send(tea.FocusMsg{})
+	if slices.ContainsFunc(h.a.data.lib, func(sk core.Skill) bool { return sk.Path == "tdd" }) {
+		t.Fatal("focus should reload the library")
 	}
 }

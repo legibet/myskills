@@ -3,6 +3,7 @@ package skill
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -50,26 +51,29 @@ func TestReadFileValid(t *testing.T) {
 		content string
 		want    Metadata
 	}{
-		{"minimal", "---\nname: tdd\ndescription: Test first.\n---\n# TDD\n", Metadata{"tdd", "Test first."}},
-		{"crlf", "---\r\nname: tdd\r\ndescription: Test first.\r\n---\r\n# TDD\r\n", Metadata{"tdd", "Test first."}},
-		{"no body", "---\nname: tdd\ndescription: d\n---", Metadata{"tdd", "d"}},
-		{"quoted digits", "---\nname: \"123\"\ndescription: \"true\"\n---\n", Metadata{"123", "true"}},
-		{"explicit str tag", "---\nname: !!str 42\ndescription: d\n---\n", Metadata{"42", "d"}},
-		{"hyphens and digits", "---\nname: a-1-b\ndescription: d\n---\n", Metadata{"a-1-b", "d"}},
-		{"64 chars", "---\nname: " + strings.Repeat("a", 64) + "\ndescription: d\n---\n", Metadata{strings.Repeat("a", 64), "d"}},
-		{"folded description", "---\nname: tdd\ndescription: >\n  Two\n  lines\n---\n", Metadata{"tdd", "Two lines"}},
-		{"description trimmed", "---\nname: tdd\ndescription: \"  d  \"\n---\n", Metadata{"tdd", "d"}},
-		{"1024 runes", "---\nname: tdd\ndescription: " + strings.Repeat("é", 1024) + "\n---\n", Metadata{"tdd", strings.Repeat("é", 1024)}},
+		{"minimal", "---\nname: tdd\ndescription: Test first.\n---\n# TDD\n", Metadata{Name: "tdd", Description: "Test first."}},
+		{"crlf", "---\r\nname: tdd\r\ndescription: Test first.\r\n---\r\n# TDD\r\n", Metadata{Name: "tdd", Description: "Test first."}},
+		{"no body", "---\nname: tdd\ndescription: d\n---", Metadata{Name: "tdd", Description: "d"}},
+		{"quoted digits", "---\nname: \"123\"\ndescription: \"true\"\n---\n", Metadata{Name: "123", Description: "true"}},
+		{"explicit str tag", "---\nname: !!str 42\ndescription: d\n---\n", Metadata{Name: "42", Description: "d"}},
+		{"hyphens and digits", "---\nname: a-1-b\ndescription: d\n---\n", Metadata{Name: "a-1-b", Description: "d"}},
+		{"64 chars", "---\nname: " + strings.Repeat("a", 64) + "\ndescription: d\n---\n", Metadata{Name: strings.Repeat("a", 64), Description: "d"}},
+		{"folded description", "---\nname: tdd\ndescription: >\n  Two\n  lines\n---\n", Metadata{Name: "tdd", Description: "Two lines"}},
+		{"description trimmed", "---\nname: tdd\ndescription: \"  d  \"\n---\n", Metadata{Name: "tdd", Description: "d"}},
+		{"1024 runes", "---\nname: tdd\ndescription: " + strings.Repeat("é", 1024) + "\n---\n", Metadata{Name: "tdd", Description: strings.Repeat("é", 1024)}},
 		{
 			"optional fields",
 			"---\nname: tdd\ndescription: d\nlicense: MIT\ncompatibility: Requires git\nallowed-tools: Bash(git:*) Read\nmetadata:\n  author: me\n  version: \"1.0\"\n---\n",
-			Metadata{"tdd", "d"},
+			Metadata{
+				Name: "tdd", Description: "d", License: "MIT", Compatibility: "Requires git", AllowedTools: "Bash(git:*) Read",
+				Metadata: map[string]string{"author": "me", "version": "1.0"},
+			},
 		},
-		{"empty metadata", "---\nname: tdd\ndescription: d\nmetadata: {}\n---\n", Metadata{"tdd", "d"}},
-		{"500 char compatibility", "---\nname: tdd\ndescription: d\ncompatibility: " + strings.Repeat("c", 500) + "\n---\n", Metadata{"tdd", "d"}},
-		{"yes is a string", "---\nname: tdd\ndescription: yes\n---\n", Metadata{"tdd", "yes"}},
-		{"unknown fields", "---\nname: tdd\ndescription: d\nfoo: [1, 2]\nbar: 3\n---\n", Metadata{"tdd", "d"}},
-		{"dashes in body", "---\nname: tdd\ndescription: d\n---\n---\nmore\n", Metadata{"tdd", "d"}},
+		{"empty metadata", "---\nname: tdd\ndescription: d\nmetadata: {}\n---\n", Metadata{Name: "tdd", Description: "d"}},
+		{"500 char compatibility", "---\nname: tdd\ndescription: d\ncompatibility: " + strings.Repeat("c", 500) + "\n---\n", Metadata{Name: "tdd", Description: "d", Compatibility: strings.Repeat("c", 500)}},
+		{"yes is a string", "---\nname: tdd\ndescription: yes\n---\n", Metadata{Name: "tdd", Description: "yes"}},
+		{"unknown fields", "---\nname: tdd\ndescription: d\nfoo: [1, 2]\nbar: 3\n---\n", Metadata{Name: "tdd", Description: "d"}},
+		{"dashes in body", "---\nname: tdd\ndescription: d\n---\n---\nmore\n", Metadata{Name: "tdd", Description: "d"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -79,7 +83,7 @@ func TestReadFileValid(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got %+v, want %+v", got, tt.want)
 			}
 		})

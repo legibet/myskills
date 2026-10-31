@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/legibet/myskills/internal/core"
 	"github.com/legibet/myskills/internal/skillssh"
@@ -67,7 +68,12 @@ func TestFindAddsResultWithoutEnabling(t *testing.T) {
 	h := findHarness(t, f)
 	h.typeText("review")
 	h.fire()
-	h.press("enter")
+	h.press("enter", "space")
+	h.contains("Add review to the library?", "From https://github.com/acme/skills.git")
+	if got := f.called("Fetch"); len(got) != 0 {
+		t.Fatalf("added before it was confirmed: %v", got)
+	}
+	h.press("y")
 	want := []string{"Fetch https://github.com/acme/skills.git skill=review", "Install [review]"}
 	if got := slices.Concat(f.called("Fetch"), f.called("Install")); !slices.Equal(got, want) {
 		t.Fatalf("calls = %v, want %v", got, want)
@@ -75,8 +81,10 @@ func TestFindAddsResultWithoutEnabling(t *testing.T) {
 	if got := slices.Concat(f.called("Enable"), f.called("Disable")); len(got) != 0 {
 		t.Fatalf("adding must not enable: %v", got)
 	}
-	h.contains("✓ added", "Added review to the library from acme/skills", "enable it from Skills")
-	h.press("enter")
+	h.contains("✓ added", "Added review to the library from acme/skills")
+	h.lacks("enable it")
+	h.press("space")
+	h.contains("review is already in your library as review")
 	if len(f.called("Install")) != 1 {
 		t.Fatal("adding twice should not install again")
 	}
@@ -91,7 +99,7 @@ func TestFindAddedSkillIsSelectedInSkills(t *testing.T) {
 	h.press("enter", "f")
 	h.typeText("review")
 	h.fire()
-	h.press("enter", "esc")
+	h.press("enter", "space", "y", "esc")
 	if r, _ := h.a.current(); h.a.view != Skills || r.key() != "review" || h.a.sk.tab != tabAll || h.a.sk.filter.Value() != "" {
 		t.Fatalf("view %v, row %q, tab %v, filter %q", h.a.view, r.key(), h.a.sk.tab, h.a.sk.filter.Value())
 	}
@@ -111,8 +119,8 @@ func TestFindMarksInstalledResults(t *testing.T) {
 	h.typeText("review")
 	h.fire()
 	h.contains("✓ in library", "✓ in your library as review")
-	h.press("enter")
-	if len(f.called("Fetch")) != 0 {
+	h.press("enter", "space")
+	if len(f.called("Fetch")) != 0 || h.a.modal != nil {
 		t.Fatal("an installed result should not be fetched")
 	}
 }
@@ -139,21 +147,63 @@ func TestFindBrowsesSource(t *testing.T) {
 	if got := f.called("Fetch"); !slices.Equal(got, []string{"Fetch https://github.com/acme/skills.git skill="}) {
 		t.Fatalf("calls = %v", got)
 	}
-	h.contains("acme/skills · 3 skills", "alpha", "skills/alpha", "✓ in library", "✗ conflict", "First skill.", "Body of /co/alpha")
+	h.contains("acme/skills · 3 skills", "alpha", "skills/alpha", "✓ in library", "✗ conflict", "About alpha.", "Body of /co/alpha")
 
-	h.press("down", "down", "enter") // core decides, and refuses the conflict
-	h.contains("already has a skill \"gamma\" from another source")
-	h.press("up", "up", "enter")
-	if got := f.called("Install"); !slices.Equal(got, []string{"Install [gamma]", "Install [alpha]"}) {
+	h.press("down", "down", "space") // the name is taken: nothing to confirm
+	h.contains("The library already has gamma from another source under this name")
+	h.press("up", "up", "space")
+	h.contains("Add alpha to the library?", "From https://github.com/acme/skills.git · skills/alpha")
+	h.press("y")
+	if got := f.called("Install"); !slices.Equal(got, []string{"Install [alpha]"}) {
 		t.Fatalf("calls = %v", got)
 	}
 	h.contains("✓ added")
 
-	h.press("esc")
-	if h.a.fd.fetched != nil || h.a.view != Find {
-		t.Fatal("esc should leave the source but stay in Find")
+	for _, k := range []string{"esc", "h"} {
+		if h.a.fd.fetched == nil {
+			h.press("enter") // the Browse row fetches it again
+		}
+		h.contains("acme/skills · 3 skills")
+		h.press(k)
+		if h.a.fd.fetched != nil || h.a.view != Find {
+			t.Fatalf("%s should leave the source but stay in Find", k)
+		}
+		h.contains("→ Browse acme/skills")
 	}
-	h.contains("→ Browse acme/skills")
+}
+
+func TestFindQueryTakesEveryKey(t *testing.T) {
+	f := libraryFixture()
+	h := findHarness(t, f)
+	h.typeText("react best qjklh")
+	if v := h.a.fd.input.Value(); v != "react best qjklh" || !h.a.fd.typing || h.a.modal != nil {
+		t.Fatalf("query %q, typing %v", v, h.a.fd.typing)
+	}
+
+	// esc goes to the results, then back to Skills.
+	h.typeText("")
+	h.a.fd.input.SetValue("review")
+	h.send(nil)
+	h.press("enter")
+	if h.a.fd.typing {
+		t.Fatal("enter should focus the results")
+	}
+	h.press("/")
+	if !h.a.fd.typing {
+		t.Fatal("/ should focus the query")
+	}
+	h.press("esc")
+	if h.a.fd.typing || h.a.view != Find {
+		t.Fatal("esc in the query should focus the results")
+	}
+	h.press("up") // up from the first row edits the query
+	if !h.a.fd.typing {
+		t.Fatal("up from the first row should focus the query")
+	}
+	h.press("esc", "esc")
+	if h.a.view != Skills {
+		t.Fatal("esc in the results should go back to Skills")
+	}
 }
 
 func TestFindFetchErrorRetries(t *testing.T) {
@@ -162,8 +212,8 @@ func TestFindFetchErrorRetries(t *testing.T) {
 	h := findHarness(t, f)
 	h.typeText("acme/nope")
 	h.press("enter")
-	h.contains("Couldn't fetch acme/nope", "repository not found", "ctrl+r")
-	h.press("ctrl+r")
+	h.contains("Couldn't fetch acme/nope", "repository not found", "r retry")
+	h.press("r")
 	if got := f.called("Fetch"); len(got) != 2 {
 		t.Fatalf("calls = %v", got)
 	}
@@ -175,13 +225,14 @@ func TestFindSearchErrorRetries(t *testing.T) {
 	h := findHarness(t, f)
 	h.typeText("review")
 	h.fire()
-	h.contains("Search failed", "skills.sh: 503", "ctrl+r retry")
-	h.press("ctrl+r")
+	h.contains("Search failed", "skills.sh: 503")
+	h.press("enter") // enter in the query searches again
 	h.contains("acme/skills")
 }
 
 func TestFindPreviewWaitsForCursor(t *testing.T) {
 	f := libraryFixture()
+	f.markdown["acme/skills/review"] = "---\nname: review\ndescription: Reviews code.\nlicense: MIT\nmetadata:\n  author: acme\n---\n# review remote body"
 	h := findHarness(t, f)
 	h.typeText("review")
 	h.fire() // debounce → results, which start the settle timer
@@ -189,13 +240,14 @@ func TestFindPreviewWaitsForCursor(t *testing.T) {
 		t.Fatalf("preview fetched before the cursor settled: %v", got)
 	}
 	h.contains("Loading preview…")
-	h.press("down", "up")
+	h.press("enter", "down", "up")
 	h.fire() // three settle timers; only the last counts
 	if got := f.called("SkillMarkdown"); !slices.Equal(got, []string{"SkillMarkdown acme/skills/review"}) {
 		t.Fatalf("calls = %v", got)
 	}
-	h.contains("review remote body")
-	h.lacks("name: review") // frontmatter is stripped
+	// The frontmatter shows as fields above the body.
+	h.contains("Reviews code.", "license", "MIT", "author", "acme", "review remote body")
+	h.lacks("name: review", "---")
 
 	h.press("down")
 	h.fire()
@@ -227,7 +279,7 @@ func TestFindOpensSourceInBrowser(t *testing.T) {
 	h := findHarness(t, libraryFixture())
 	h.typeText("review")
 	h.fire()
-	h.press("ctrl+o")
+	h.press("enter", "o")
 	h.contains("Opening https://github.com/acme/skills")
 }
 
@@ -237,12 +289,12 @@ func TestFindIgnoresStaleResults(t *testing.T) {
 	h.typeText("review")
 	h.fire()
 	h.typeText("er") // the next search is pending
-	h.press("enter")
-	if got := f.called("Fetch"); len(got) != 0 {
+	h.press("down", "space")
+	if got := f.called("Fetch"); len(got) != 0 || h.a.modal != nil {
 		t.Fatalf("a result of the previous query was added: %v", got)
 	}
-	if h.a.nkeys.Enter.Enabled() {
-		t.Fatal("enter should be off until the results answer the input")
+	if h.a.nkeys.Add.Enabled() {
+		t.Fatal("adding should be off until the results answer the input")
 	}
 }
 
@@ -251,14 +303,14 @@ func TestFindAddsAgainAfterRemove(t *testing.T) {
 	h := findHarness(t, f)
 	h.typeText("review")
 	h.fire()
-	h.press("enter", "esc") // added; Skills selects it
-	h.press("x", "y")
+	h.press("enter", "space", "y", "esc") // added; Skills selects it
+	h.press("d", "y")
 	if got := f.called("Remove"); !slices.Equal(got, []string{"Remove review"}) {
 		t.Fatalf("calls = %v", got)
 	}
 	h.press("f")
 	h.lacks("✓ added", "✓ in library")
-	h.press("enter")
+	h.press("enter", "space", "y")
 	if got := f.called("Install"); len(got) != 2 {
 		t.Fatalf("the removed skill should install again: %v", got)
 	}
@@ -310,8 +362,9 @@ func TestShutdownClosesCheckoutsOfUnfinishedInstalls(t *testing.T) {
 	h.typeText(input)
 	h.press("enter")
 	h.contains("alpha")
-	_, install := h.a.Update(keyPress("enter")) // the install starts
-	h.press("esc")                              // leaving keeps the checkout for it
+	h.press("space")
+	_, install := h.a.Update(keyPress("y")) // the install starts
+	h.press("esc")                          // leaving keeps the checkout for it
 	if _, err := os.Stat(checkout.Root); err != nil {
 		t.Fatalf("the checkout went while an install used it: %v", err)
 	}
@@ -360,5 +413,37 @@ func drain(cmd tea.Cmd) {
 		for _, c := range b {
 			drain(c)
 		}
+	}
+}
+
+func TestFindCountsLineUpAndGoFirst(t *testing.T) {
+	f := libraryFixture()
+	f.results["review"] = []skillssh.Result{
+		{Source: "acme/skills", SkillID: "review-long", Installs: 12345},
+		{Source: "other/repo", SkillID: "lint", Installs: 999},
+	}
+	f.lib = append(f.lib, core.Skill{Path: "review-long", Name: "review-long", Dir: "/lib/review-long", Record: gitRecord("https://github.com/acme/skills.git")})
+	h := findHarness(t, f)
+	h.typeText("review")
+	h.fire()
+	row := func(name string) string {
+		for _, l := range strings.Split(h.view(), "\n") {
+			if list, _, _ := strings.Cut(l, "│"); strings.Contains(list, name) && !strings.Contains(list, "›") {
+				return strings.TrimRight(list, " ")
+			}
+		}
+		t.Fatalf("no row %s:\n%s", name, h.view())
+		return ""
+	}
+	// The counts end in the same column, after the state.
+	long, short := row("review-long"), row("lint")
+	if !strings.HasSuffix(long, "✓ in library  12.3K") || !strings.HasSuffix(short, "999") ||
+		ansi.StringWidth(long) != ansi.StringWidth(short) {
+		t.Fatalf("rows:\n%q\n%q", long, short)
+	}
+	// Short of room, the count goes and the state stays.
+	h.send(windowSize(44, 24))
+	if long = row("review-long"); !strings.HasSuffix(long, "✓ in library") {
+		t.Fatalf("narrow row = %q", long)
 	}
 }

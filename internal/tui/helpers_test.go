@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -23,8 +24,9 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	readBody = func(dir string) (string, error) {
-		return "# Body of " + dir + "\n\nSome **markdown**.", nil
+	readSkill = func(dir string) (string, error) {
+		name := filepath.Base(dir)
+		return "---\nname: " + name + "\ndescription: About " + name + ".\n---\n# Body of " + dir + "\n\nSome **markdown**.", nil
 	}
 	tick = func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd {
 		return func() tea.Msg { return timerMsg{d: d, fn: fn} }
@@ -383,6 +385,7 @@ func keyPress(k string) tea.KeyPressMsg {
 	special := map[string]rune{
 		"enter": tea.KeyEnter, "esc": tea.KeyEscape, "tab": tea.KeyTab, "up": tea.KeyUp,
 		"down": tea.KeyDown, "backspace": tea.KeyBackspace, "space": tea.KeySpace,
+		"left": tea.KeyLeft, "right": tea.KeyRight,
 	}
 	switch {
 	case k == "shift+tab":
@@ -415,7 +418,7 @@ func libraryFixture() *fakeService {
 	f.lib = []core.Skill{
 		{Path: "broken", Name: "broken", Dir: "/lib/broken", Entry: "broken", Issue: "SKILL.md: missing description"},
 		{Path: "notes", Name: "notes", Description: "Keeps notes.", Dir: "/lib/notes", Entry: "notes", Record: gitRecord("https://github.com/acme/notes.git")},
-		{Path: "agent-skills/review", Name: "review", Description: "Reviews code.", Dir: "/lib/agent-skills/review", Entry: "agent-skills", Linked: true},
+		{Path: "agent-skills/review", Name: "review", Description: "Reviews code.", Dir: "/lib/agent-skills/review", Entry: "agent-skills", Linked: true, LinkTarget: "/home/agent-skills"},
 		{Path: "tdd", Name: "tdd", Description: "Test-driven development.", Dir: "/lib/tdd", Entry: "tdd", Record: gitRecord("https://github.com/acme/tdd.git")},
 	}
 	f.status[project] = core.Status{

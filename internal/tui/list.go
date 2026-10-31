@@ -69,17 +69,10 @@ func layoutRow(w int, bg color.Color, left, right []seg) string {
 		}
 		return st.Render(s)
 	}
-	width := func(segs []seg) int {
-		n := 0
-		for _, s := range segs {
-			n += ansi.StringWidth(s.text)
-		}
-		return n
-	}
-	lw, rw := width(left), width(right)
+	lw, rw := segsWidth(left), segsWidth(right)
 	for len(right) > 0 && lw+rw+1 > w && (rw+1)*5 > w*2 {
 		right = right[1:]
-		rw = width(right)
+		rw = segsWidth(right)
 	}
 	avail := w - rw
 	if rw > 0 {
@@ -124,6 +117,15 @@ func layoutRow(w int, bg color.Color, left, right []seg) string {
 		b.WriteString(paint(s.style, s.text))
 	}
 	return b.String()
+}
+
+// segsWidth is the width of segments in cells.
+func segsWidth(segs []seg) int {
+	n := 0
+	for _, s := range segs {
+		n += ansi.StringWidth(s.text)
+	}
+	return n
 }
 
 // fitBlock pads or cuts s to exactly w cells by h lines, so that panes join

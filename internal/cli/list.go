@@ -75,7 +75,7 @@ and issues: invalid skills, local modifications, missing linked folders.`,
 				return a.printJSON(out)
 			}
 			if len(lib) == 0 {
-				a.note("The library is empty.")
+				a.note("The library is empty. Add skills with 'myskills add <source>' or search with 'myskills find <query>'.")
 				return nil
 			}
 			dup := core.DuplicateNames(lib)
