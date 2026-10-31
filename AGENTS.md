@@ -14,4 +14,4 @@ myskills is a Go CLI + TUI that manages agent skills: a private library at `~/.m
 
 - Packages under `internal/` split by responsibility; `core` is the only domain API, and `cli`/`tui` are thin frontends over it.
 - Tests isolate state with temp `HOME` and `MYSKILLS_HOME`, and use local git repos over `file://` instead of the network.
-- New files under `~/.myskills` never reuse the name `state.json`: the archived macOS app (tag `macos-app`) owns it.
+- New files under `~/.myskills` never reuse the name `state.json`: the archived macOS app (branch `macos-app`) owns it.

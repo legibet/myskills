@@ -60,7 +60,7 @@ make test    # go test -race ./...
 make lint    # go vet + golangci-lint
 ```
 
-The macOS app that preceded this tool is archived at the `macos-app` tag.
+The macOS app that preceded this tool is archived on the `macos-app` branch.
 
 ## License
 

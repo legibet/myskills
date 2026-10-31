@@ -2,7 +2,7 @@
 
 Cross-platform Go CLI + TUI for managing agent skills (folders with `SKILL.md`).
 Linux and macOS are first-class; Windows is best effort. Replaces the macOS SwiftUI app
-(archived as git tag `macos-app`).
+(archived on the git branch `macos-app`).
 
 ## 1. Goals and non-goals
 
@@ -448,11 +448,3 @@ are skipped with a warning).
 - CLI: in-process with temp env; output, JSON, exit codes, non-TTY errors.
 - TUI: model tests driving key messages for the main flows.
 - `go vet`, `golangci-lint run`, `go test -race ./...` on macOS and Linux.
-
-## 13. One-time migration from the macOS app (out of band)
-- Old `state.json` skills: `git` → git source (url, ref, subpath); `skillsSh` → git source on
-  `https://github.com/<source>.git` with the path found by cloning each repo once and matching
-  the name; `local` → no record. Hashes: recompute v1 for skills whose old hash matched their
-  on-disk content; otherwise store a hash that cannot match, so they show as modified.
-- Custom targets → `customAgents`; projects → `projects`. Enablement records are rediscovered
-  by scanning.
