@@ -81,9 +81,11 @@ func (k filterKeys) ShortHelp() []key.Binding {
 	return []key.Binding{k.Apply, k.Clear, k.Up, k.Down}
 }
 
-// readerKeys apply while a preview is open full screen.
+// readerKeys apply while a preview is open full screen, along with the row
+// actions of the view (see app.readerActions).
 type readerKeys struct {
-	Up, Down, HalfDown, HalfUp, PageDown, PageUp, Top, Bottom, Back, Quit key.Binding
+	Up, Down, HalfDown, HalfUp, PageDown, PageUp, Top, Bottom key.Binding
+	Back, Help, Quit                                          key.Binding
 }
 
 func newReaderKeys() readerKeys {
@@ -92,17 +94,19 @@ func newReaderKeys() readerKeys {
 		Down:     bind([]string{"down", "j"}, "↓/j", "down"),
 		HalfDown: bind([]string{"ctrl+d"}, "ctrl+d", "half page down"),
 		HalfUp:   bind([]string{"ctrl+u"}, "ctrl+u", "half page up"),
-		PageDown: bind([]string{"pgdown", "space", "f"}, "space", "page down"),
-		PageUp:   bind([]string{"pgup", "b"}, "b", "page up"),
+		PageDown: bind([]string{"pgdown", "ctrl+f"}, "ctrl+f", "page down"),
+		PageUp:   bind([]string{"pgup", "ctrl+b"}, "ctrl+b", "page up"),
 		Top:      bind([]string{"home", "g"}, "g", "top"),
 		Bottom:   bind([]string{"end", "G"}, "G", "bottom"),
 		Back:     bind([]string{"esc", "h", "left"}, "esc", "back"),
+		Help:     bind([]string{"?"}, "?", "help"),
 		Quit:     bind([]string{"q", "ctrl+c"}, "q", "quit"),
 	}
 }
 
-func (k readerKeys) ShortHelp() []key.Binding {
-	return []key.Binding{k.Back, k.Down, k.Up, k.PageDown, k.PageUp, k.Top, k.Bottom, k.Quit}
+// Scroll returns the scrolling bindings, by priority.
+func (k readerKeys) Scroll() []key.Binding {
+	return []key.Binding{k.Down, k.Up, k.HalfDown, k.HalfUp, k.PageDown, k.PageUp, k.Top, k.Bottom}
 }
 
 // queryKeys apply while the Find query input is focused; it takes all other
@@ -115,18 +119,21 @@ func newQueryKeys() queryKeys {
 	return queryKeys{
 		Submit:  bind([]string{"enter"}, "enter", "search"),
 		Results: bind([]string{"down"}, "↓", "results"),
-		Back:    bind([]string{"esc"}, "esc", "results"),
+		Back:    bind([]string{"esc"}, "esc", "skills"),
 	}
 }
 
 func (k queryKeys) ShortHelp() []key.Binding {
+	if k.Submit.Help().Desc == k.Results.Help().Desc { // a fetched source: enter does what ↓ does
+		return []key.Binding{k.Submit, k.Back}
+	}
 	return []key.Binding{k.Submit, k.Results, k.Back}
 }
 
 // findKeys are the Find view bindings while the list is focused.
 type findKeys struct {
 	Up, Down, Top, Bottom, PageUp, PageDown key.Binding
-	Read, Add, Open, Search, Retry, Leave   key.Binding
+	Read, Add, Open, Search, Retry          key.Binding
 	ScrollDown, ScrollUp, Back, Help, Quit  key.Binding
 }
 
@@ -141,26 +148,25 @@ func newFindKeys() findKeys {
 		Read:       bind([]string{"enter", "l", "right"}, "enter", "read"),
 		Add:        bind([]string{"space"}, "space", "add"),
 		Open:       bind([]string{"o"}, "o", "open in browser"),
-		Search:     bind([]string{"/"}, "/", "search"),
+		Search:     bind([]string{"/"}, "/", "edit query"),
 		Retry:      bind([]string{"r"}, "r", "retry"),
-		Leave:      bind([]string{"h", "left"}, "h", "back to results"),
 		ScrollDown: bind([]string{"ctrl+d"}, "ctrl+d", "preview down"),
 		ScrollUp:   bind([]string{"ctrl+u"}, "ctrl+u", "preview up"),
-		Back:       bind([]string{"esc"}, "esc", "skills"),
+		Back:       bind([]string{"esc", "h", "left"}, "esc", "back"),
 		Help:       bind([]string{"?"}, "?", "help"),
 		Quit:       bind([]string{"q", "ctrl+c"}, "q", "quit"),
 	}
 }
 
 func (k findKeys) ShortHelp() []key.Binding {
-	return []key.Binding{k.Add, k.Read, k.Search, k.Retry, k.Back, k.Open}
+	return []key.Binding{k.Add, k.Read, k.Back, k.Retry, k.Open}
 }
 
 func (k findKeys) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.Top, k.Bottom, k.PageUp, k.PageDown},
 		{k.Read, k.Add, k.Open, k.Retry, k.ScrollDown, k.ScrollUp},
-		{k.Search, k.Leave, k.Back, k.Help, k.Quit},
+		{k.Back, k.Search, k.Help, k.Quit},
 	}
 }
 

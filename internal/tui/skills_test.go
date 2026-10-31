@@ -419,12 +419,12 @@ func TestNarrowLayoutOpensPreview(t *testing.T) {
 	h.cursorTo("tdd")
 	for _, keys := range [][2]string{{"enter", "esc"}, {"l", "h"}, {"right", "left"}} {
 		h.press(keys[0])
-		if !h.a.reading {
+		if h.a.reading != "tdd" {
 			t.Fatalf("%s should open the preview", keys[0])
 		}
 		h.contains("About tdd.", "Body of /lib/tdd", "esc back")
 		h.press(keys[1])
-		if h.a.reading {
+		if h.a.reading != "" {
 			t.Fatalf("%s should close the preview", keys[1])
 		}
 	}
@@ -432,6 +432,62 @@ func TestNarrowLayoutOpensPreview(t *testing.T) {
 	// Growing the terminal brings the preview next to the list.
 	h.send(windowSize(130, 30))
 	h.contains("│", "About tdd.")
+}
+
+func TestReaderActsOnTheSkillRead(t *testing.T) {
+	h := newHarness(t, libraryFixture(), projectOptions(), 80, 24)
+	h.cursorTo("review")
+	h.press("enter", "space") // space enables, as in the list, rather than paging
+	if got := h.svc.called("Enable"); !slices.Equal(got, []string{"Enable /work/proj agent-skills/review mode=link agents=[] force=false"}) {
+		t.Fatalf("calls = %v", got)
+	}
+	if h.a.reading != "agent-skills/review" {
+		t.Fatal("the reader should stay open after an action")
+	}
+	h.contains("esc back", "space link", "? help")
+	h.press("d") // removing is left to the list
+	if h.a.modal != nil {
+		t.Fatal("d should do nothing in the reader")
+	}
+
+	h.press("?")
+	h.contains("ctrl+f", "page down", "edit", "quit")
+	h.press("esc")
+	if h.a.help.ShowAll || h.a.reading == "" {
+		t.Fatal("esc should close the help, then the reader")
+	}
+
+	// The reader closes when the skill it shows leaves the list.
+	h.svc.lib = slices.DeleteFunc(h.svc.lib, func(sk core.Skill) bool { return sk.Path == "agent-skills/review" })
+	h.send(tea.FocusMsg{})
+	if h.a.reading != "" {
+		t.Fatal("the reader should close when its skill is gone")
+	}
+}
+
+func TestReaderPages(t *testing.T) {
+	read := readSkill
+	t.Cleanup(func() { readSkill = read })
+	readSkill = func(string) (string, error) {
+		return "---\nname: tdd\ndescription: Long.\n---\n" + strings.Repeat("line\n\n", 40), nil
+	}
+	h := newHarness(t, libraryFixture(), projectOptions(), 80, 12)
+	h.cursorTo("tdd")
+	h.press("enter")
+	for _, k := range []string{"ctrl+f", "pgdown"} {
+		h.press("g", k)
+		if h.a.pv.vp.YOffset() == 0 {
+			t.Fatalf("%s should page down", k)
+		}
+		h.press("ctrl+b")
+		if h.a.pv.vp.YOffset() != 0 {
+			t.Fatal("ctrl+b should page up")
+		}
+	}
+	h.press("b", "f") // the pager keys of less are gone
+	if h.a.pv.vp.YOffset() != 0 || h.a.reading == "" {
+		t.Fatal("b and f should do nothing in the reader")
+	}
 }
 
 func TestViewFitsAnySize(t *testing.T) {

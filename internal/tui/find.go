@@ -70,12 +70,11 @@ func newFindState() findState {
 	}
 }
 
-// findRow is a row of the Find list: the "Browse <source>" row, a search
-// result, or a candidate of the browsed source.
+// findRow is a row of the Find list: a search result, or a candidate of the
+// browsed source.
 type findRow struct {
-	browse string
-	res    *skillssh.Result
-	cand   *core.Candidate
+	res  *skillssh.Result
+	cand *core.Candidate
 }
 
 func (r findRow) key() string {
@@ -85,7 +84,7 @@ func (r findRow) key() string {
 	case r.cand != nil:
 		return "cand:" + r.cand.Dir
 	}
-	return "browse:" + r.browse
+	return ""
 }
 
 func (a *app) findRows() []findRow {
@@ -96,8 +95,8 @@ func (a *app) findRows() []findRow {
 		}
 		return rows
 	}
-	if q := strings.TrimSpace(a.fd.input.Value()); source.IsExplicit(q) {
-		return []findRow{{browse: q}}
+	if source.IsExplicit(strings.TrimSpace(a.fd.input.Value())) {
+		return nil // until enter fetches it
 	}
 	rows := make([]findRow, len(a.fd.results))
 	for i := range a.fd.results {
@@ -120,13 +119,12 @@ func (a *app) inBrowse() bool {
 }
 
 // enterFind shows Find with the query input focused, or, when it opens with
-// a query, searching and the results focused.
+// a query, submits it as enter would.
 func (a *app) enterFind(initial bool) tea.Cmd {
 	a.view = Find
 	a.help.ShowAll = false
 	if initial && strings.TrimSpace(a.fd.input.Value()) != "" {
-		a.focusResults()
-		return a.queryChanged(true)
+		return tea.Batch(a.queryChanged(true), a.submitQuery())
 	}
 	return a.typeQuery()
 }
@@ -154,31 +152,24 @@ func (a *app) focusResults() {
 func (a *app) syncFindKeys() {
 	q, k := &a.qkeys, &a.nkeys
 	r, ok := a.findCurrent()
-	rows := len(a.findRows())
+	query := strings.TrimSpace(a.fd.input.Value())
+	explicit := source.IsExplicit(query)
 
-	q.Submit.SetHelp("enter", "search")
-	if r.browse != "" {
-		q.Submit.SetHelp("enter", "browse")
+	q.Submit.SetEnabled(explicit || utf8.RuneCountInString(query) >= 2)
+	switch {
+	case explicit && (a.fd.fetched != nil || a.fd.fetching):
+		q.Submit.SetHelp("enter", "results")
+	case explicit:
+		q.Submit.SetHelp("enter", "fetch")
+	default:
+		q.Submit.SetHelp("enter", "search")
 	}
-	q.Results.SetEnabled(rows > 0)
-	q.Back.SetHelp("esc", "skills")
-	if rows > 0 {
-		q.Back.SetHelp("esc", "results")
-	}
+	q.Results.SetEnabled(len(a.findRows()) > 0)
 
-	k.Read.SetEnabled(ok && (r.browse == "" || !a.fd.fetching))
-	k.Read.SetHelp("enter", "read")
-	if r.browse != "" {
-		k.Read.SetHelp("enter", "browse")
-	}
-	k.Add.SetEnabled(ok && r.browse == "" && !a.busy[r.key()] && (r.res == nil || a.resultsCurrent()))
+	k.Read.SetEnabled(ok)
+	k.Add.SetEnabled(ok && !a.busy[r.key()] && (r.res == nil || a.resultsCurrent()))
 	k.Retry.SetEnabled(a.fd.err != nil || a.fd.fetchErr != nil)
 	k.Open.SetEnabled(ok && (r.cand == nil || a.fd.fetched.Spec.Kind == source.Git))
-	k.Leave.SetEnabled(a.inBrowse())
-	k.Back.SetHelp("esc", "skills")
-	if a.inBrowse() {
-		k.Back.SetHelp("esc", "back to results")
-	}
 }
 
 // findKey handles a key in Find: the query input takes every key but its
@@ -199,14 +190,7 @@ func (a *app) findKey(msg tea.KeyPressMsg) tea.Cmd {
 		return a.quit()
 	case key.Matches(msg, k.Help):
 		a.help.ShowAll = !a.help.ShowAll
-	case key.Matches(msg, k.Back):
-		if a.inBrowse() {
-			return a.leaveBrowse()
-		}
-		return a.leaveFind()
-	case key.Matches(msg, k.Leave):
-		return a.leaveBrowse()
-	case key.Matches(msg, k.Search):
+	case key.Matches(msg, k.Back), key.Matches(msg, k.Search):
 		return a.typeQuery()
 	case key.Matches(msg, k.Up):
 		if a.fd.list.cursor == 0 {
@@ -230,7 +214,7 @@ func (a *app) findKey(msg tea.KeyPressMsg) tea.Cmd {
 		a.fd.list.move(page, n)
 		return a.settle()
 	case key.Matches(msg, k.Read):
-		return a.findRead()
+		a.openReader()
 	case key.Matches(msg, k.Add):
 		return a.confirmAdd()
 	case key.Matches(msg, k.Retry):
@@ -254,17 +238,14 @@ func (a *app) queryKey(msg tea.KeyPressMsg) tea.Cmd {
 		a.focusResults()
 		return nil
 	case key.Matches(msg, k.Back):
-		if len(a.findRows()) == 0 {
-			return a.leaveFind()
-		}
-		a.focusResults()
-		return nil
+		return a.leaveFind()
 	}
 	return a.findInput(msg)
 }
 
-// submitQuery is enter in the query input: it browses the source typed, or
-// searches without waiting (again, after a failure), and focuses the list.
+// submitQuery is enter in the query input: it fetches the source typed,
+// unless it is fetched already, or searches without waiting (again, after a
+// failure), and focuses the list.
 func (a *app) submitQuery() tea.Cmd {
 	q := strings.TrimSpace(a.fd.input.Value())
 	explicit := source.IsExplicit(q)
@@ -446,19 +427,6 @@ func (a *app) refreshInLibrary() {
 	}
 }
 
-// findRead is enter on a row: browse the source, or read the skill.
-func (a *app) findRead() tea.Cmd {
-	r, ok := a.findCurrent()
-	switch {
-	case !ok:
-	case r.browse != "":
-		return a.browse(r.browse)
-	default:
-		a.reading = true
-	}
-	return nil
-}
-
 // confirmAdd is space on a result or candidate: add it to the library once
 // confirmed, since that downloads and keeps files from elsewhere.
 func (a *app) confirmAdd() tea.Cmd {
@@ -527,8 +495,8 @@ func (a *app) browse(src string) tea.Cmd {
 	}
 }
 
-// leaveBrowse returns to the search results and releases the checkout once
-// no install uses it.
+// leaveBrowse drops the browsed source, when the query changes, and releases
+// its checkout once no install uses it.
 func (a *app) leaveBrowse() tea.Cmd {
 	if a.fd.fetchCancel != nil {
 		a.fd.fetchCancel()
@@ -697,10 +665,6 @@ func (a *app) openSource() tea.Cmd {
 	case r.cand != nil:
 		spec := a.fd.fetched.Spec
 		url = source.WebURL(spec.URL, spec.Ref, r.cand.RelPath)
-	default:
-		if spec, err := source.Parse(r.browse); err == nil && spec.Kind == source.Git {
-			url = source.WebURL(spec.URL, spec.Ref, spec.Subdir)
-		}
 	}
 	if url == "" {
 		return a.setStatus(stInfo, "This source has no web page")
@@ -779,10 +743,12 @@ func (a *app) findMessage(rows []findRow, w int) []string {
 			t.bad.Render("✗ Search failed"),
 			wrapText(t.dim.Render(sanitize.Line(a.fd.err.Error())), w),
 		}
-	case len(rows) > 0, a.fd.loading:
+	case len(rows) > 0, a.fd.loading, a.fd.fetching:
 		return nil
 	case a.fd.fetched != nil:
 		return []string{t.dim.Render("No skills found in this source")}
+	case source.IsExplicit(q):
+		return nil // the line above names the source; enter fetches it
 	case utf8.RuneCountInString(q) < 2:
 		return []string{
 			t.dim.Render("Type to search skills.sh."),
@@ -808,14 +774,11 @@ func (a *app) findRowView(r findRow, w int, selected bool) string {
 		nameStyle = t.dim // results of an earlier query, until the new ones arrive
 	}
 	left := []seg{cursorSeg(t, selected)}
-	switch {
-	case r.browse != "":
-		left = append(left, seg{text: "→ ", style: t.accented}, seg{text: "Browse ", style: t.dim}, seg{text: sanitize.Line(r.browse), style: nameStyle})
-	case r.res != nil:
+	if r.res != nil {
 		left = append(left,
 			seg{text: sanitize.Line(cmp.Or(r.res.Name, r.res.SkillID)), style: nameStyle},
 			seg{text: "  " + sanitize.Line(r.res.Source), style: t.hint})
-	default:
+	} else {
 		left = append(left, seg{text: sanitize.Line(r.cand.Name), style: nameStyle})
 		if r.cand.RelPath != "" {
 			left = append(left, seg{text: "  " + sanitize.Line(r.cand.RelPath), style: t.hint})
@@ -827,7 +790,7 @@ func (a *app) findRowView(r findRow, w int, selected bool) string {
 	// 40% of it.
 	var right []seg
 	if text, st := a.findStatus(r); text != "" {
-		if a.busy[r.key()] || r.browse != "" && a.fd.fetching {
+		if a.busy[r.key()] {
 			right = append(right, seg{text: a.spinnerText(bg)}, seg{text: " " + text, style: st})
 		} else {
 			right = append(right, seg{text: text, style: st})
@@ -854,8 +817,6 @@ func (a *app) findStatus(r findRow) (string, lipgloss.Style) {
 	switch {
 	case a.busy[key]:
 		return "adding", t.accented
-	case r.browse != "" && a.fd.fetching:
-		return "fetching", t.accented
 	case a.fd.added[key] != "":
 		return "✓ added", t.good
 	case r.res != nil && a.fd.inLib[key] != "":
@@ -890,16 +851,7 @@ func (a *app) findPreview(w int) (item string, header []string, intro string, d 
 	}
 	t := a.th
 	key := r.key()
-	switch {
-	case r.browse != "":
-		header = []string{t.bold.Render("Browse " + sanitize.Line(r.browse))}
-		if spec, err := source.Parse(r.browse); err == nil && spec.Kind == source.Git {
-			header = append(header, t.dim.Render(sanitize.Line(spec.URL)))
-		} else if err == nil {
-			header = append(header, t.dim.Render(tildePath(spec.Path)))
-		}
-		return key, header, "", nil
-	case r.res != nil:
+	if r.res != nil {
 		res := r.res
 		title := t.bold.Render(sanitize.Line(cmp.Or(res.Name, res.SkillID)))
 		if res.Name != "" && res.Name != res.SkillID {

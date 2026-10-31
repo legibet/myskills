@@ -361,8 +361,12 @@ changes made is printed to the normal screen.
  space link  c copy  enter read  / filter  f find  u update  a agents  s scope  ? help
 ```
 
-- Layout: list + preview at ≥ 100 columns; narrower: list only. `enter`/`l`/`→` opens the
-  preview full screen (in both layouts), `esc`/`h`/`←` returns. Resizes live.
+- Layout: list + preview at ≥ 100 columns; narrower: list only. Resizes live.
+- Reader: `enter`/`l`/`→` opens the highlighted row's preview full screen (in both layouts),
+  `esc`/`h`/`←` returns. It scrolls with `↑↓`/`jk`, `ctrl+d`/`ctrl+u` (half page),
+  `ctrl+f`/`ctrl+b` or `pgdn`/`pgup` (page), `g`/`G`, and keeps the row actions that leave
+  the skill in view: `space`, `c`, `a`, `u`, `e` in Skills; `space`, `o` in Find. It closes
+  when its row leaves the list (e.g. disabled on the Enabled tab).
 - Header: the active scope is prominent; the other scope is summarized (e.g. `global: 3`).
   `s` switches scope (only when a project is available).
 - Preview: name, source (`show`'s source line, §8), state in the active scope; notes (invalid,
@@ -371,8 +375,8 @@ changes made is printed to the normal screen.
   compatibility, allowed-tools, metadata entries), and the rendered body. Find and the add
   picker preview SKILL.md the same way.
 - Help bar: the keys that work for the highlighted row, in priority order, as many as fit the
-  width, always ending with `? help`. `?` shows the full help, in fewer columns when narrow;
-  `?` or `esc` closes it.
+  width, always ending with `? help` (except in text inputs). `?` shows the full help, in fewer
+  columns when narrow; `?` or `esc` closes it.
 - Status lines and preview notes state what happened or what is; keys are left to the help bar.
 
 Skills view
@@ -401,16 +405,22 @@ Skills view
 - Destructive actions (removing a copy, `ErrModified`) open a confirm modal.
 
 Find view (`f` from Skills; `myskills find` opens here)
-- Two focuses. The query input takes every key but `enter` (search now, or browse a source),
-  `↓` (to the results) and `esc` (to the results, or back to Skills when there are none); it
-  has the focus when Find opens, unless `myskills find <query>` gave one. The list: `↑↓`/`jk`
-  move (`↑` on the first row and `/` edit the query), `enter`/`l`/`→` read full screen,
-  `space` add, `o` open in the browser, `r` retry, `esc` back to Skills.
-- Text that parses as an explicit source (URL, `owner/repo` with a slash, a path) shows a
-  single row "Browse <source>": `enter` fetches it and lists its skills (preview from local
-  files); `h`/`←`/`esc` go back to the search results.
-- Otherwise a debounced skills.sh search (≈250 ms, ≥ 2 chars); stale responses are dropped by
-  request id; errors show inline.
+- Levels: Skills → query input → result list → reader. `enter` goes one level in, `esc`
+  one level out (`h`/`←` too, except in the input, where they edit).
+- The query input has the focus when Find opens, and takes every key but `enter` (submit and
+  go to the list), `↓` (to the list) and `esc` (back to Skills). `myskills find <query>`
+  opens with the query submitted.
+- The list shows what the query gives:
+  - A search term: a debounced skills.sh search (≈250 ms, ≥ 2 chars); `enter` searches
+    without waiting. Stale responses are dropped by request id.
+  - An explicit source (URL, `owner/repo` with a slash, a path): the line under the input
+    names it (the git URL or the folder), and `enter` fetches it (a clone, so never while
+    typing); the list then holds its skills (preview from local files). Going back to the
+    input keeps them; editing the query drops them.
+  - Errors show in place of the list; `enter` in the input or `r` in the list retries.
+- The list: `↑↓`/`jk` move, `enter`/`l`/`→` read, `space` add, `o` open in the browser,
+  `r` retry; `esc`/`h`/`←`, `/` and `↑` on the first row go back to the input.
+- A paste goes to the input; pasted while the list has the focus, it replaces the query.
 - Rows: name, `owner/repo`, state (`✓ in library`, `✓ added`, `✗ conflict`, `✗ invalid`) and
   the installs (`12.3K`) at the right edge, where they line up. A short row shortens the name
   and source first; when that leaves too little room, the installs are dropped before the state.

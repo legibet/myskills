@@ -341,7 +341,7 @@ func (a *app) skillsKey(msg tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(msg, k.ScrollUp):
 		a.pv.vp.HalfPageUp()
 	case key.Matches(msg, k.Read):
-		a.reading = true
+		a.openReader()
 	case key.Matches(msg, k.Toggle):
 		return a.toggle()
 	case key.Matches(msg, k.Copy):

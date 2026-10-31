@@ -385,7 +385,7 @@ func keyPress(k string) tea.KeyPressMsg {
 	special := map[string]rune{
 		"enter": tea.KeyEnter, "esc": tea.KeyEscape, "tab": tea.KeyTab, "up": tea.KeyUp,
 		"down": tea.KeyDown, "backspace": tea.KeyBackspace, "space": tea.KeySpace,
-		"left": tea.KeyLeft, "right": tea.KeyRight,
+		"left": tea.KeyLeft, "right": tea.KeyRight, "pgdown": tea.KeyPgDown,
 	}
 	switch {
 	case k == "shift+tab":

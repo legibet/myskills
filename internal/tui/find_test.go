@@ -57,10 +57,24 @@ func TestFindInitialQuerySearchesAtOnce(t *testing.T) {
 		t.Fatalf("calls = %v", got)
 	}
 	h.contains("acme/skills")
-	h.press("esc")
+	if h.a.fd.typing {
+		t.Fatal("the results should have the focus")
+	}
+	h.press("esc", "esc") // back to the query, then to Skills
 	if h.a.view != Skills {
 		t.Fatal("esc should go back to Skills")
 	}
+}
+
+func TestFindInitialSourceFetchesAtOnce(t *testing.T) {
+	f := libraryFixture()
+	spec, _ := source.Parse("acme/skills")
+	f.fetched["acme/skills"] = &core.Fetched{Spec: spec, Candidates: []core.Candidate{{Name: "alpha", Dir: "/co/alpha"}}}
+	h := newHarness(t, f, Options{View: Find, Query: "acme/skills"}, 120, 30)
+	if got := f.called("Fetch"); len(got) != 1 || h.a.fd.typing {
+		t.Fatalf("calls = %v, typing %v", got, h.a.fd.typing)
+	}
+	h.contains("acme/skills · 1 skill", "alpha")
 }
 
 func TestFindAddsResultWithoutEnabling(t *testing.T) {
@@ -99,7 +113,7 @@ func TestFindAddedSkillIsSelectedInSkills(t *testing.T) {
 	h.press("enter", "f")
 	h.typeText("review")
 	h.fire()
-	h.press("enter", "space", "y", "esc")
+	h.press("enter", "space", "y", "esc", "esc")
 	if r, _ := h.a.current(); h.a.view != Skills || r.key() != "review" || h.a.sk.tab != tabAll || h.a.sk.filter.Value() != "" {
 		t.Fatalf("view %v, row %q, tab %v, filter %q", h.a.view, r.key(), h.a.sk.tab, h.a.sk.filter.Value())
 	}
@@ -142,10 +156,12 @@ func TestFindBrowsesSource(t *testing.T) {
 	if got := f.called("Search"); len(got) != 0 {
 		t.Fatalf("an explicit source should not search skills.sh: %v", got)
 	}
-	h.contains("→ Browse acme/skills")
+	// The source is named, not listed: enter fetches it.
+	h.contains("https://github.com/acme/skills", "enter fetch")
+	h.lacks("Browse", "No skills found")
 	h.press("enter")
-	if got := f.called("Fetch"); !slices.Equal(got, []string{"Fetch https://github.com/acme/skills.git skill="}) {
-		t.Fatalf("calls = %v", got)
+	if got := f.called("Fetch"); !slices.Equal(got, []string{"Fetch https://github.com/acme/skills.git skill="}) || h.a.fd.typing {
+		t.Fatalf("calls = %v, typing %v", got, h.a.fd.typing)
 	}
 	h.contains("acme/skills · 3 skills", "alpha", "skills/alpha", "✓ in library", "✗ conflict", "About alpha.", "Body of /co/alpha")
 
@@ -159,16 +175,23 @@ func TestFindBrowsesSource(t *testing.T) {
 	}
 	h.contains("✓ added")
 
-	for _, k := range []string{"esc", "h"} {
-		if h.a.fd.fetched == nil {
-			h.press("enter") // the Browse row fetches it again
+	// Back in the query, the source stays: enter or ↓ return to it unfetched.
+	for _, k := range []string{"enter", "down"} {
+		h.press("esc")
+		if !h.a.fd.typing || h.a.fd.fetched == nil {
+			t.Fatal("esc should focus the query and keep the source")
 		}
-		h.contains("acme/skills · 3 skills")
+		h.contains("enter results")
 		h.press(k)
-		if h.a.fd.fetched != nil || h.a.view != Find {
-			t.Fatalf("%s should leave the source but stay in Find", k)
+		if h.a.fd.typing || len(f.called("Fetch")) != 1 {
+			t.Fatalf("%s should return to the source without fetching it again", k)
 		}
-		h.contains("→ Browse acme/skills")
+	}
+
+	// Editing the query leaves it.
+	h.press("esc", "backspace")
+	if h.a.fd.fetched != nil || h.a.view != Find {
+		t.Fatal("a new query should leave the source")
 	}
 }
 
@@ -180,30 +203,62 @@ func TestFindQueryTakesEveryKey(t *testing.T) {
 		t.Fatalf("query %q, typing %v", v, h.a.fd.typing)
 	}
 
-	// esc goes to the results, then back to Skills.
-	h.typeText("")
-	h.a.fd.input.SetValue("review")
-	h.send(nil)
+	// enter or ↓ go to the results; esc, h, ←, / and ↑ on the first row
+	// come back; esc in the query goes back to Skills.
+	h.a.fd.input.SetValue("")
+	h.typeText("review")
+	h.fire()
+	for _, k := range []string{"esc", "h", "left", "/", "up"} {
+		h.press("down")
+		if h.a.fd.typing {
+			t.Fatal("down should focus the results")
+		}
+		h.press(k)
+		if !h.a.fd.typing || h.a.view != Find {
+			t.Fatalf("%s in the results should focus the query", k)
+		}
+	}
 	h.press("enter")
 	if h.a.fd.typing {
 		t.Fatal("enter should focus the results")
 	}
-	h.press("/")
-	if !h.a.fd.typing {
-		t.Fatal("/ should focus the query")
-	}
-	h.press("esc")
-	if h.a.fd.typing || h.a.view != Find {
-		t.Fatal("esc in the query should focus the results")
-	}
-	h.press("up") // up from the first row edits the query
-	if !h.a.fd.typing {
-		t.Fatal("up from the first row should focus the query")
-	}
 	h.press("esc", "esc")
 	if h.a.view != Skills {
-		t.Fatal("esc in the results should go back to Skills")
+		t.Fatal("esc in the query should go back to Skills")
 	}
+}
+
+func TestFindPasteOverResultsStartsANewQuery(t *testing.T) {
+	h := findHarness(t, libraryFixture())
+	h.typeText("review")
+	h.fire()
+	h.press("enter")
+	h.send(tea.PasteMsg{Content: "acme/skills"})
+	if v := h.a.fd.input.Value(); v != "acme/skills" || !h.a.fd.typing {
+		t.Fatalf("query %q, typing %v", v, h.a.fd.typing)
+	}
+	h.send(tea.PasteMsg{Content: "/x"}) // in the query, a paste inserts
+	if v := h.a.fd.input.Value(); v != "acme/skills/x" {
+		t.Fatalf("query %q", v)
+	}
+}
+
+func TestFindReaderAdds(t *testing.T) {
+	f := libraryFixture()
+	h := newHarness(t, f, projectOptions(), 80, 24)
+	h.press("f")
+	h.typeText("review")
+	h.fire()
+	h.press("enter", "enter") // to the results, then read the first
+	if h.a.reading == "" {
+		t.Fatal("enter should open the reader")
+	}
+	h.contains("space add", "o open in browser")
+	h.press("space", "y")
+	if got := f.called("Install"); !slices.Equal(got, []string{"Install [review]"}) || h.a.reading == "" {
+		t.Fatalf("calls = %v, reading %q", got, h.a.reading)
+	}
+	h.contains("✓ added")
 }
 
 func TestFindFetchErrorRetries(t *testing.T) {
@@ -303,7 +358,7 @@ func TestFindAddsAgainAfterRemove(t *testing.T) {
 	h := findHarness(t, f)
 	h.typeText("review")
 	h.fire()
-	h.press("enter", "space", "y", "esc") // added; Skills selects it
+	h.press("enter", "space", "y", "esc", "esc") // added; Skills selects it
 	h.press("d", "y")
 	if got := f.called("Remove"); !slices.Equal(got, []string{"Remove review"}) {
 		t.Fatalf("calls = %v", got)
@@ -364,7 +419,8 @@ func TestShutdownClosesCheckoutsOfUnfinishedInstalls(t *testing.T) {
 	h.contains("alpha")
 	h.press("space")
 	_, install := h.a.Update(keyPress("y")) // the install starts
-	h.press("esc")                          // leaving keeps the checkout for it
+	h.press("esc")
+	h.typeText("x") // a new query leaves the source; the install keeps the checkout
 	if _, err := os.Stat(checkout.Root); err != nil {
 		t.Fatalf("the checkout went while an install used it: %v", err)
 	}

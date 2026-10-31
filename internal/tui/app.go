@@ -50,7 +50,7 @@ type app struct {
 	nkeys findKeys
 
 	view      View
-	reading   bool // the preview is open full screen
+	reading   string // key of the row whose preview is open full screen, if any
 	modal     *modal
 	status    status
 	statusSeq int
@@ -201,7 +201,7 @@ func (a *app) key(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return cmd
 	}
-	if a.reading {
+	if a.reading != "" {
 		return a.readerKey(msg)
 	}
 	if a.view == Find {
@@ -212,9 +212,12 @@ func (a *app) key(msg tea.KeyPressMsg) tea.Cmd {
 
 func (a *app) paste(msg tea.PasteMsg) tea.Cmd {
 	switch {
-	case a.modal != nil || a.reading:
+	case a.modal != nil || a.reading != "":
 		return nil
 	case a.view == Find:
+		if !a.fd.typing {
+			a.fd.input.SetValue("") // pasted over the list: a new query, not an addition to the last
+		}
 		cmd := a.typeQuery()
 		return tea.Batch(cmd, a.findInput(msg))
 	case a.sk.filtering:
@@ -233,11 +236,58 @@ func (a *app) quit() tea.Cmd {
 	return a.setStatus(stInfo, "Finishing "+plural(len(a.busy), "change", "changes")+"… (ctrl+c again to quit now)")
 }
 
+// currentKey is the key of the highlighted row, or "" when there is none.
+func (a *app) currentKey() string {
+	if a.view == Find {
+		r, _ := a.findCurrent()
+		return r.key()
+	}
+	if r, ok := a.current(); ok {
+		return r.key()
+	}
+	return ""
+}
+
+// openReader opens the highlighted row's preview full screen.
+func (a *app) openReader() {
+	a.reading = a.currentKey()
+	a.help.ShowAll = false
+}
+
+func (a *app) closeReader() {
+	a.reading = ""
+	a.help.ShowAll = false
+}
+
+// readerActions are the row actions that also work in the reader: those
+// that act on the skill being read and keep it in view.
+func (a *app) readerActions() []key.Binding {
+	if a.view == Find {
+		return []key.Binding{a.nkeys.Add, a.nkeys.Open}
+	}
+	k := a.keys
+	return []key.Binding{k.Toggle, k.Copy, k.Agents, k.Update, k.Edit}
+}
+
 func (a *app) readerKey(msg tea.KeyPressMsg) tea.Cmd {
 	k, vp := a.rkeys, &a.pv.vp
+	if a.help.ShowAll && msg.String() == "esc" {
+		a.help.ShowAll = false
+		return nil
+	}
+	for _, b := range a.readerActions() {
+		if key.Matches(msg, b) { // the view runs it on the highlighted row, the one read
+			if a.view == Find {
+				return a.findKey(msg)
+			}
+			return a.skillsKey(msg)
+		}
+	}
 	switch {
 	case key.Matches(msg, k.Back):
-		a.reading = false
+		a.closeReader()
+	case key.Matches(msg, k.Help):
+		a.help.ShowAll = !a.help.ShowAll
 	case key.Matches(msg, k.Quit):
 		return a.quit()
 	case key.Matches(msg, k.Up):
@@ -265,9 +315,12 @@ func (a *app) active() bool {
 	return len(a.busy) > 0 || a.sk.checking || a.fd.loading || a.fd.fetching
 }
 
-// sync brings derived state in line after every update: list scrolling, the
-// preview, the spinner.
+// sync brings derived state in line after every update: the reader, list
+// scrolling, the preview, the spinner.
 func (a *app) sync() tea.Cmd {
+	if a.reading != "" && a.currentKey() != a.reading {
+		a.closeReader() // the row read left the list, e.g. disabled on the Enabled tab
+	}
 	l := a.layout()
 	a.sk.list.fit(len(a.sk.rows), l.bodyH-1)
 	a.fd.list.fit(len(a.findRows()), l.bodyH-2)
@@ -660,7 +713,7 @@ func (a *app) otherScope() (core.Scope, bool) {
 }
 
 func (a *app) bodyView(l layout) string {
-	if a.reading {
+	if a.reading != "" {
 		return " " + indent(a.pv.view(a.th, a.width-2, l.bodyH))
 	}
 	var list string
@@ -711,8 +764,12 @@ func (a *app) statusView() string {
 func (a *app) helpView() string {
 	w := a.width - 2
 	switch {
-	case a.reading:
-		return fitHelp(a.help, w, a.rkeys.ShortHelp())
+	case a.reading != "" && a.help.ShowAll:
+		k := a.rkeys
+		return fitFullHelp(a.help, w, [][]key.Binding{k.Scroll(), a.readerActions(), {k.Back, k.Help, k.Quit}})
+	case a.reading != "":
+		k := a.rkeys
+		return fitHelp(a.help, w, slices.Concat([]key.Binding{k.Back}, a.readerActions(), k.Scroll()), k.Help)
 	case a.view == Find && a.fd.typing:
 		return fitHelp(a.help, w, a.qkeys.ShortHelp())
 	case a.view == Find && a.help.ShowAll:
@@ -766,7 +823,7 @@ func centered(w, h int, lines ...string) string {
 // settle (see settle).
 func (a *app) syncPreview(l layout) tea.Cmd {
 	w := l.prevW
-	if a.reading {
+	if a.reading != "" {
 		w = a.width - 2
 	}
 	if w <= 0 {
