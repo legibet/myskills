@@ -9,9 +9,10 @@ myskills is a Go CLI + TUI that manages agent skills: a private library at `~/.m
 - Build: `make build` (binary `./myskills`)
 - Test: `make test` (`go test -race ./...`)
 - Lint: `make lint` (`go vet` + `golangci-lint`, gofumpt/goimports formatting)
+- Release: `make publish` builds HEAD with goreleaser (`.goreleaser.yaml`) and replaces the assets of the rolling `latest` GitHub release; it moves the `latest` tag.
 
 ## Code
 
-- Packages under `internal/` split by responsibility; `core` is the only domain API, and `cli`/`tui` are thin frontends over it.
+- Packages under `internal/` split by responsibility; `core` is the only domain API, and `cli`/`tui` are thin frontends over it (as will be the planned mygo GUI).
 - Tests isolate state with temp `HOME` and `MYSKILLS_HOME`, and use local git repos over `file://` instead of the network.
 - New files under `~/.myskills` never reuse the name `state.json`: the archived macOS app (branch `macos-app`) owns it.

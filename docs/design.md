@@ -16,11 +16,12 @@ Goals
 - A polished TUI for the frequent flows (browse the library, toggle enablement, search and
   add) and complete non-interactive commands for scripts and coding agents.
 - Single binary; works without any config file.
+- Later, a native cross-platform GUI built with [mygo](https://github.com/egoist/mygo), as
+  another frontend over `internal/core`.
 
 Non-goals
 - Team sharing: project manifests, project lockfiles, restore/sync commands.
 - Driving agents' own enable/disable settings.
-- A GUI (a later frontend could reuse `internal/core`).
 - Background update checks, telemetry.
 - Migration code from the macOS app inside the tool (done once, out of band).
 

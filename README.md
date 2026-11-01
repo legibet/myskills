@@ -17,12 +17,23 @@ interactive terminal app, for Linux and macOS (Windows is best effort).
 
 ## Install
 
-Go 1.27 or later and git are required.
+git is required. Binaries for macOS and Linux (amd64, arm64) are on the rolling
+[`latest` release](https://github.com/legibet/myskills/releases/latest), rebuilt from recent
+`main`:
 
 ```sh
-git clone https://github.com/legibet/MySkills.git
-cd MySkills
-make install   # go install .
+curl -fsSL https://github.com/legibet/myskills/releases/latest/download/myskills_darwin_arm64.tar.gz | tar -xz myskills
+sudo mv myskills /usr/local/bin/   # or any directory on PATH
+```
+
+Replace `darwin_arm64` with `darwin_amd64`, `linux_amd64` or `linux_arm64` as needed. macOS
+quarantines a binary downloaded with a browser; `xattr -d com.apple.quarantine myskills` clears
+it.
+
+With Go 1.27 or later:
+
+```sh
+go install github.com/legibet/myskills@latest
 ```
 
 ## Quick start
@@ -58,6 +69,7 @@ behavior in detail.
 make build   # ./myskills
 make test    # go test -race ./...
 make lint    # go vet + golangci-lint
+make publish # replace the latest release with a build of HEAD (goreleaser, gh)
 ```
 
 The macOS app that preceded this tool is archived on the `macos-app` branch.

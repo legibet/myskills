@@ -19,10 +19,6 @@ import (
 	"github.com/legibet/myskills/internal/core"
 )
 
-// version is set at build time with
-// -ldflags "-X github.com/legibet/myskills/internal/cli.version=v1.2.3".
-var version string
-
 // Execute runs the command line and returns the process exit code.
 func Execute() int {
 	// The first interrupt cancels the context; a second one kills the process.
@@ -140,12 +136,9 @@ func args(v cobra.PositionalArgs) cobra.PositionalArgs {
 	}
 }
 
-// versionString is the -ldflags version, or the module version from the
-// build info.
+// versionString is the module version that go build stamps: the tag, or the
+// commit's pseudo-version.
 func versionString() string {
-	if version != "" {
-		return version
-	}
 	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
 		return bi.Main.Version
 	}
