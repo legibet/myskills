@@ -2,19 +2,41 @@ version: "2"
 
 linters:
   enable:
+    - bodyclose
     - errorlint
+    - forcetypeassert
     - gocritic
     - misspell
+    - modernize
     - nolintlint
     - revive
     - unconvert
     - unparam
     - usestdlibvars
+    - usetesting
   settings:
-    revive:
-      rules:
-        - name: exported
-          disabled: true
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+        - shadow
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+  exclusions:
+    presets:
+      - comments
+    rules:
+      - path: _test\.go
+        linters:
+          - forcetypeassert
+      - path: _test\.go
+        text: unused-parameter
+        linters:
+          - revive
+      - text: "^exported:"
+        linters:
+          - revive
 
 formatters:
   enable:

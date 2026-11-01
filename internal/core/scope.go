@@ -269,11 +269,11 @@ func agentDirs(agents []agent.Agent, sc Scope) []*agentDir {
 		if !ok {
 			continue
 		}
-		real := realPath(p)
-		i := slices.IndexFunc(dirs, func(d *agentDir) bool { return d.real == real })
+		resolved := realPath(p)
+		i := slices.IndexFunc(dirs, func(d *agentDir) bool { return d.real == resolved })
 		if i < 0 {
 			i = len(dirs)
-			dirs = append(dirs, &agentDir{path: p, real: real})
+			dirs = append(dirs, &agentDir{path: p, real: resolved})
 		}
 		d := dirs[i]
 		d.agents = append(d.agents, a.ID)

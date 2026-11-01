@@ -163,11 +163,11 @@ func (s *Service) scanEntry(name string, lock *store.Lock) []Skill {
 // children are skipped; symlinked children are followed, and seen (resolved
 // paths) guards against cycles.
 func findSkills(dir, libPath string, seen map[string]bool, found []string) []string {
-	if real, err := filepath.EvalSymlinks(dir); err == nil {
-		if seen[real] {
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		if seen[resolved] {
 			return found
 		}
-		seen[real] = true
+		seen[resolved] = true
 	}
 	if _, err := os.Stat(filepath.Join(dir, skill.FileName)); err == nil {
 		return append(found, libPath)

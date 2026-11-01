@@ -483,7 +483,7 @@ func TestFindCountsLineUpAndGoFirst(t *testing.T) {
 	h.typeText("review")
 	h.fire()
 	row := func(name string) string {
-		for _, l := range strings.Split(h.view(), "\n") {
+		for l := range strings.SplitSeq(h.view(), "\n") {
 			if list, _, _ := strings.Cut(l, "│"); strings.Contains(list, name) && !strings.Contains(list, "›") {
 				return strings.TrimRight(list, " ")
 			}

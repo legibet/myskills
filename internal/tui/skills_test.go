@@ -518,7 +518,7 @@ func TestCursorShowsWithoutColor(t *testing.T) {
 	h := newHarness(t, libraryFixture(), projectOptions(), 120, 30)
 	h.press("down")
 	var marked []string
-	for _, l := range strings.Split(stripView(h.a.View().Content), "\n") {
+	for l := range strings.SplitSeq(stripView(h.a.View().Content), "\n") {
 		if strings.Contains(l, "▌") {
 			marked = append(marked, l)
 		}
