@@ -1,36 +1,20 @@
 # myskills
 
-myskills manages agent skills (folders with a `SKILL.md`) from one private library, and enables
-them per project or globally only where you need them. It is a command line tool with an
-interactive terminal app, for Linux and macOS (Windows is best effort).
+myskills is a command line tool that manages agent skills from a private library, and enables them per project or globally as needed.
 
 - **Library**: skills live in `~/.myskills/skills`, added from GitHub, any git remote, a local
-  folder, or [skills.sh](https://skills.sh). Adding never enables anything.
+  folder, or [skills.sh](https://skills.sh).
 - **Link** (default): a personal symlink into the library. In a git project, it is kept out of
   git through the repository's `info/exclude`, so nothing shows up in `git status`.
 - **Copy**: real files in the project, meant to be committed. myskills records what it copied,
-  so it can tell when the library has changed (`outdated`) or the copy was edited (`modified`),
-  and never deletes edited copies without asking.
-- **Agents**: Universal (`.agents/skills`, read by Codex, Cursor, Gemini CLI and others), Claude
-  Code (`.claude/skills`) and Antigravity are built in; others can be added. Skills are enabled
-  for the default agents unless you choose.
+  so it can tell when the library has changed (`outdated`) or the copy was edited (`modified`).
+- **Agents**: Built-in supported agents include Universal (`.agents/skills`, read by Codex, Cursor, Gemini CLI and others), Claude (`.claude/skills`) and Antigravity. You can add other custum agents in `~/.myskills/config.json`.
 
 ## Install
 
-git is required. Binaries for macOS and Linux (amd64, arm64) are on the rolling
-[`latest` release](https://github.com/legibet/myskills/releases/latest), rebuilt from recent
-`main`:
+Download the rolling [`latest` release](https://github.com/legibet/myskills/releases/latest) and put `myskills` on your `PATH`.
 
-```sh
-curl -fsSL https://github.com/legibet/myskills/releases/latest/download/myskills_darwin_arm64.tar.gz | tar -xz myskills
-sudo mv myskills /usr/local/bin/   # or any directory on PATH
-```
-
-Replace `darwin_arm64` with `darwin_amd64`, `linux_amd64` or `linux_arm64` as needed. macOS
-quarantines a binary downloaded with a browser; `xattr -d com.apple.quarantine myskills` clears
-it.
-
-With Go 1.27 or later:
+Or install from source with Go 1.27 or later:
 
 ```sh
 go install github.com/legibet/myskills@latest
@@ -54,11 +38,11 @@ interactive app, `?` shows all keys.
 
 ## Files
 
-| Path | Contents |
-|---|---|
-| `~/.myskills/skills/` | the library |
-| `~/.myskills/config.json` | default agents and custom agents (hand-editable) |
-| `~/.myskills/lock.json` | where each skill came from, recorded copies, known projects |
+| Path                      | Contents                                                    |
+| ------------------------- | ----------------------------------------------------------- |
+| `~/.myskills/skills/`     | the library                                                 |
+| `~/.myskills/config.json` | default agents and custom agents (hand-editable)            |
+| `~/.myskills/lock.json`   | where each skill came from, recorded copies, known projects |
 
 Set `MYSKILLS_HOME` to use another location. [`docs/design.md`](docs/design.md) describes the
 behavior in detail.
