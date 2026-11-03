@@ -233,6 +233,15 @@ func (s *Service) Usage() (map[string][]Scope, error) {
 	return usage, nil
 }
 
+// Scopes returns the global scope and every known project that exists.
+func (s *Service) Scopes() ([]Scope, error) {
+	st, err := s.load()
+	if err != nil {
+		return nil, err
+	}
+	return knownScopes(st.lock), nil
+}
+
 // knownScopes returns the global scope and every known project that exists.
 func knownScopes(lock *store.Lock) []Scope {
 	scopes := []Scope{Global}

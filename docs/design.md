@@ -15,9 +15,10 @@ Goals
   - `copy`: real files in the agent skill dir. Owned by the project; meant to be committed.
 - A polished TUI for the frequent flows (browse the library, toggle enablement, search and
   add) and complete non-interactive commands for scripts and coding agents.
-- Single binary; works without any config file.
-- Later, a native cross-platform GUI built with [mygo](https://github.com/egoist/mygo), as
-  another frontend over `internal/core`.
+- A native desktop app (§10) for macOS and Linux, built with [mygo](https://github.com/egoist/mygo)
+  as another frontend over `internal/core`: the overview and management of every place skills
+  are enabled.
+- The CLI is a single binary; neither needs a config file.
 
 Non-goals
 - Team sharing: project manifests, project lockfiles, restore/sync commands.
@@ -443,7 +444,112 @@ Behavior rules
 - One palette with light/dark variants chosen from the terminal background, one accent color,
   muted secondary text, semantic success/warning/error. No Nerd Font glyphs.
 
-## 10. Architecture
+## 10. Desktop app
+
+A native app in `app/`, built with [mygo](https://github.com/egoist/mygo) (pinned) as native
+UI (package `ui`, drawn by mygo, no webview): the overview and management of every place
+skills are enabled, which the TUI, bound to one project, can't give. It calls `core` only, and
+follows the same rules as the CLI and TUI (modes, confirmations, update and copy refresh,
+adding never enables).
+
+```
+┌──────────┬─────────────────────────────┬───────────────────────────────────────────┐
+│ Skills  2│ [Search]    All Enabled Unused│ review                    [Update]  [⋯] │
+│ Projects │ review                Update │ Review code changes for bugs…             │
+│ Find     │ agent-skills · Global, 2 proj│ agent-skills/review                       │
+│ Agents   │ pdf                          │ ENABLED IN                                │
+│          │ anthropics/skills · Not enab…│ Global     [Link ▾] [Universal, Claude ▾] ✕│
+│          │                              │ opcode     [Copy ▾] [Universal ▾] Outdated │
+│          │                              │ + Enable in Project…                      │
+│          │                              │ SKILL.md (rendered)                       │
+└──────────┴──────────────────────────────┴───────────────────────────────────────────┘
+```
+
+Window and data
+- One window: a sidebar (Skills, Projects, Find, Agents) beside the page. On macOS the title
+  bar is hidden, the window controls inset over the sidebar, which shows the sidebar material.
+  Skills' badge counts the updates the last check found; Projects' counts the places needing
+  attention (outdated or modified copies, broken links).
+- What the pages show is read in the background: the library, the places (global and every
+  known project that exists, §3 `projects`), the status of each, and the agents. It is read
+  again when the app becomes active and after each change; the pages keep showing the last
+  read meanwhile. A project left with nothing enabled leaves the list (§3), as in the CLI.
+- `⌘1`–`⌘4` choose the pages, `⌘F` focuses the page's search field.
+
+Skills
+- The list: every library skill, filtered by a search field (name, description, source) and
+  `All` / `Enabled` (anywhere) / `Unused` (nowhere). A row: the name (the library path too
+  when names repeat, §8), badges (`Invalid`, `Update`, `Outdated`, `Modified`), and the
+  source label with where it is enabled (`Global, 2 projects`, `Not enabled`).
+- The title bar: `Check for Updates` (every updatable skill; progress while it runs), then
+  `Update All` while the check found updates.
+- The selected skill: name, description, source (a link to the repository page for git
+  sources) and library path; `Update` while the last check found one; a `⋯` menu: Update,
+  Reveal in Finder, Open SKILL.md, Remove from Library…. Notes: why it is invalid,
+  local changes in the library, removed upstream, a failed check.
+- `Enabled in`: a row for Global, always, and one per project that has the skill; then
+  `Enable in Project…`, a menu of the known projects that don't have it and `Choose
+  Folder…` (resolved as §6 Scope; the home directory and `/` are refused).
+- Then SKILL.md: the optional frontmatter fields that are set, and the rendered body
+  (selectable; links open in the browser).
+- Updating a skill is the TUI's `u`: check, update the library, then refresh its outdated
+  copies in every place, each step asking before it discards local changes. `Update All`
+  applies every update found, then refreshes the outdated copies of the updated skills.
+
+Placement rows (in a skill's `Enabled in`, and in a place's list on Projects)
+- The place (or the skill, on Projects), a mode menu (`Link`, `Copy`; `Mixed` shows as is),
+  an agents menu (a check box per agent skill directory; agents sharing one are one item, as
+  in the TUI's `a`), the state (`Outdated` with `Refresh`, `Modified`), and `Disable`.
+  Global without the skill shows `Not enabled` and `Enable` (link, default agents).
+- An action that deletes copies (disabling, switching to links, unchecking an agent) asks
+  first, naming them; for modified copies it says their changes are lost.
+
+Projects
+- The list: Global and the known projects (name, path, how many skills, a badge when one
+  needs attention). The selected place: name and path, Reveal in Finder, `Add Skills…` (a
+  searchable checklist of the library skills it doesn't have, a mode, `Enable`), and
+  `Refresh Copies` while some copies are outdated and unmodified.
+- Then its skills as placement rows (the name opens it on Skills), its broken links
+  (`Remove`), and the entries not managed by myskills, listed and never touched.
+
+Find
+- A search field taking a skills.sh query, `owner/repo`, a git URL or a folder path, and
+  `Choose Folder…`. The same rules as the TUI's Find: a search term is searched as it is typed
+  (≈250 ms, ≥ 2 chars; Return at once); an explicit source is named under the field with
+  `Fetch` (Return fetches it; a clone, so never while typing), and its skills replace the
+  results. `Choose Folder…` fetches the folder chosen at once (its path may have spaces, which a
+  typed source can't).
+- Results beside the preview of the selected one (its SKILL.md: from skills.sh for search
+  results, from the files for a fetched source). A row: name, source and installs (the
+  description, for a fetched source, which the bar under the field names), and `Add`, or its
+  state: `In Library`, `Added`, `Conflict`, `Invalid`. Adding asks nothing (the button says
+  what it does, the preview where from) and never enables; the preview of a skill added or in
+  the library offers `Show in Skills`, where it is enabled. A fetched folder also offers `Link
+  Folder` (§5 `--link`), which shows `Linked` once the library has it.
+- While a new search runs, the last results stay, dimmed, and can't be added.
+- A fetched checkout is removed when the query changes, once the adds from it are done, and on
+  quit.
+
+Agents
+- Every agent with its project and global directories. A switch makes it a default (the last
+  default stays on); `Add Agent…` adds a custom agent (id, name, project and global
+  directories, validated by core: what it refuses shows in the dialog, which stays open); a
+  custom agent's `Remove…` asks first (its link placements are removed, its copies stay).
+
+Feedback and work
+- A change shows in place. Errors open an alert naming what failed; warnings (e.g. the git
+  exclude) and outcomes with nothing changed ("tdd is up to date") show in a toast.
+- Work runs off the main thread; while it runs for a skill or a place, their controls are
+  disabled with a spinner. Quitting cancels network work and waits for changes in flight.
+
+Release: `make publish` also builds the app (`go tool mygo build app`, configured by
+`app/mygo.json`) and uploads it under names without its version: `MySkills.dmg` (macOS,
+universal, signed ad hoc: the README says how to clear the quarantine), and for Linux
+`MySkills-linux-<arch>.deb`, `MySkills-linux-<arch>.tar.gz` and `MySkills-install.sh`, which
+installs the archive for the user. The icon is `app/icon`: the Icon Composer `AppIcon.icon` on
+macOS, `icon.png` elsewhere.
+
+## 11. Architecture
 
 ```
 main.go                cli.Execute()
@@ -461,22 +567,25 @@ internal/
            (ErrConflict, ErrModified, ErrAmbiguous, ErrNotFound, ErrNoProject).
   cli/     cobra commands, plain + JSON output
   tui/     Bubble Tea app: skills view, find view, picker, modals, theme, keys
+app/                  the desktop app (package main), mygo native UI over core: one file per page,
+                       placements.go for the rows both Skills and Projects show
 ```
 
 Dependencies: `github.com/spf13/cobra`; `charm.land/bubbletea/v2`, `charm.land/lipgloss/v2`,
 `charm.land/bubbles/v2`, `charm.land/glamour/v2`; `go.yaml.in/yaml/v3`;
-`github.com/sahilm/fuzzy`; `golang.org/x/sys` (locks on Windows). `git` is required for remote
-sources and git-aware behavior (missing git: remote add fails clearly; exclude/tracking checks
-are skipped with a warning).
+`github.com/sahilm/fuzzy`; `golang.org/x/sys` (locks on Windows). The desktop app uses
+`github.com/egoist/mygo`, pinned, with its `mygo` command as a Go tool (`go tool mygo`). `git`
+is required for remote sources and git-aware behavior (missing git: remote add fails clearly;
+exclude/tracking checks are skipped with a warning).
 
-## 11. Platforms
+## 12. Platforms
 - Linux, macOS: symlinks, flock.
 - Windows: junctions for links, LockFileEx, drive/UNC local paths; names that are invalid
   Windows filenames fail clearly. Junctions are made with `mklink /J` through `cmd`, which
   expands `%VAR%` in paths. Cross-compiled (`GOOS=windows go build ./...`), not tested on
   Windows yet.
 
-## 12. Testing
+## 13. Testing
 - Unit: validation (typed YAML), hash (ambiguity, exec bit), discovery, copy rules (symlink
   policy), source spec parsing, ls-remote resolution, agent resolution, exclude block
   rendering/escaping, lock/config round-trip and refusal on bad files.
@@ -487,4 +596,7 @@ are skipped with a warning).
 - skills.sh client against `httptest`.
 - CLI: in-process with temp env; output, JSON, exit codes, non-TTY errors.
 - TUI: model tests driving key messages for the main flows.
+- Desktop app: `ui.Tester` drives the window headless over the real core in a temp home
+  (clicks, menus, alerts, typing), with the work the app posts to the main thread run in order;
+  skills.sh against `httptest`. `go tool mygo vet ./app` checks the native UI lifetimes.
 - `go vet`, `golangci-lint run`, `go test -race ./...` on macOS and Linux.
