@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -52,7 +53,10 @@ type app struct {
 	data        data
 	loading     bool
 	loadAgain   bool
-	busy        map[string]bool // keys of the work running
+	busy        map[string]bool      // keys of the work running
+	busySince   map[string]time.Time // when a frame first showed each, by the UI clock
+	intents     map[string]bool      // what switches and check boxes were set to, by control
+	waiting     []func()             // to run once the next read completes
 	page        string
 	alerts      []alert
 	alertOpen   bool
@@ -68,12 +72,11 @@ type app struct {
 }
 
 func newApp(svc *core.Service, desk desktop, post func(func())) *app {
-	a := &app{svc: svc, desk: desk, post: post, busy: map[string]bool{}, page: pageSkills}
+	a := &app{svc: svc, desk: desk, post: post, busy: map[string]bool{}, busySince: map[string]time.Time{}, intents: map[string]bool{}, page: pageSkills}
 	a.ctx, a.cancel = context.WithCancel(context.Background())
 	a.skills.split = 300
 	a.projects.split = 260
 	a.find.split = 360
-	a.reload()
 	return a
 }
 
@@ -158,13 +161,17 @@ func read(svc *core.Service) data {
 }
 
 // reload reads everything again in the background; the pages show the last
-// read meanwhile. A reload asked for while one runs follows it.
-func (a *app) reload() {
+// read meanwhile. A reload asked for while one runs follows it. then runs
+// once a read started after the call completes.
+func (a *app) reload(then ...func()) {
+	a.waiting = append(a.waiting, then...)
 	if a.loading {
 		a.loadAgain = true
 		return
 	}
 	a.loading = true
+	done := a.waiting
+	a.waiting = nil
 	go func() {
 		d := read(a.svc)
 		a.post(func() {
@@ -172,6 +179,9 @@ func (a *app) reload() {
 			a.data = d
 			if d.err != nil {
 				a.fail("Couldn't read the library", d.err)
+			}
+			for _, fn := range done {
+				fn()
 			}
 			if a.loadAgain {
 				a.loadAgain = false
@@ -279,12 +289,13 @@ type op struct {
 	fail    string // the title of the alert when it fails
 	discard string // what discarding local changes loses, when it is known
 	run     func(force bool) outcome
-	then    func() // on the main thread, after it succeeded
+	then    func() // on the main thread, once it succeeded and the read after it completed
 }
 
-// start runs o in the background, then reads everything again. When core
-// refuses to discard local changes, it asks whether to, and runs o again
-// forced.
+// start runs o in the background, then reads everything again. The key
+// stays busy until that read completes, so that the controls never go back
+// to the state before the change. When core refuses to discard local
+// changes, it asks whether to, and runs o again forced.
 func (a *app) start(o op, force bool) {
 	if a.busy[o.key] {
 		return
@@ -293,25 +304,81 @@ func (a *app) start(o op, force bool) {
 	a.work.Go(func() {
 		out := o.run(force)
 		a.post(func() {
-			delete(a.busy, o.key)
-			switch {
-			case errors.Is(out.err, core.ErrModified) && !force:
-				a.ask("Discard local changes?", cmp.Or(o.discard, out.err.Error()), "Discard", func() { a.start(o, true) })
-			case out.err != nil:
-				a.fail(o.fail, out.err)
-			}
 			for _, w := range out.warnings {
 				a.toast(w, "warning")
 			}
 			if out.note != "" {
 				a.toast(out.note, "")
 			}
-			if out.err == nil && o.then != nil {
-				o.then()
+			if errors.Is(out.err, core.ErrModified) && !force {
+				delete(a.busy, o.key)
+				a.ask("Discard local changes?", cmp.Or(o.discard, out.err.Error()), "Discard", func() { a.start(o, true) })
+				a.reload()
+				return
 			}
-			a.reload()
+			if out.err != nil {
+				a.fail(o.fail, out.err)
+			}
+			a.reload(func() {
+				delete(a.busy, o.key)
+				if out.err == nil && o.then != nil {
+					o.then()
+				}
+			})
 		})
 	})
+}
+
+// busyDelay is how long work runs before its controls show it: most changes
+// are done sooner, and showing them only flickers.
+const busyDelay = 300 * time.Millisecond
+
+// working reports whether the work of key shows as running: it is busy, and
+// has been for busyDelay.
+func (a *app) working(c *ui.Context, key string) bool {
+	if !a.busy[key] {
+		delete(a.busySince, key)
+		return false
+	}
+	now := c.Now()
+	since, ok := a.busySince[key]
+	if !ok {
+		since = now
+		a.busySince[key] = now
+	}
+	if wait := busyDelay - now.Sub(since); wait > 0 {
+		c.After(wait)
+		return false
+	}
+	return true
+}
+
+// toggled is the value a switch or a check box shows: what it was set to
+// while the change it started runs or waits to be confirmed, else on.
+func (a *app) toggled(control, key string, on bool) bool {
+	if v, ok := a.intents[control]; ok && (a.busy[key] || a.alertOpen) {
+		return v
+	}
+	delete(a.intents, control)
+	return on
+}
+
+// chooseFolder asks for a folder, one dialog at a time, and gives fn the
+// folder chosen on the main thread.
+func (a *app) chooseFolder(title string, fn func(dir string)) {
+	if a.busy["folder"] {
+		return
+	}
+	a.busy["folder"] = true
+	go func() {
+		dir := a.desk.chooseFolder(title)
+		a.post(func() {
+			delete(a.busy, "folder")
+			if dir != "" {
+				fn(dir)
+			}
+		})
+	}()
 }
 
 // alert is a question or an error over the window. The last button is the

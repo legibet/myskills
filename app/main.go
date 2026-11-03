@@ -50,7 +50,8 @@ func main() {
 			StateKey:       "main",
 			Content:        ui.View(a.view),
 		})
-		mygo.App.OnDidBecomeActive(func() { win.Update(a.reload) })
+		a.reload() // after win is set: the read posts to it
+		mygo.App.OnDidBecomeActive(func() { win.Update(func() { a.reload() }) })
 	})
 	err = mygo.App.Run()
 	if a != nil {

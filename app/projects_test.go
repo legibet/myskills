@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"slices"
 	"testing"
@@ -109,5 +110,27 @@ func TestRemoveBrokenLink(t *testing.T) {
 	h.click("Remove")
 	if st := h.status(web); len(st.Broken) != 0 || len(st.Others) != 1 {
 		t.Fatalf("status = %+v, want only the unmanaged entry", st)
+	}
+}
+
+func TestShowSkillScrollsToIt(t *testing.T) {
+	h := newHarness(t)
+	skills := map[string]string{}
+	for i := range 40 {
+		name := fmt.Sprintf("skill-%02d", i)
+		skills[name] = "skills/" + name
+	}
+	h.add(h.repo("pack", skills))
+	web := h.project("web")
+	h.enable(web, "skill-39", core.EnableOptions{})
+	h.start()
+	if first, last := h.a.skills.list.Visible(); last >= 39 {
+		t.Fatalf("rows %d to %d show at first; the test needs skill-39 out of view", first, last)
+	}
+	h.click("Projects")
+	h.click("web")
+	h.click("skill-39")
+	if first, last := h.a.skills.list.Visible(); h.a.skills.sel != 39 || first > 39 || last < 39 {
+		t.Errorf("chosen %d, rows %d to %d show", h.a.skills.sel, first, last)
 	}
 }

@@ -14,7 +14,7 @@ import (
 // row is about: the place on Skills, the skill on Projects.
 func (a *app) placementRow(c *ui.Context, p *place, sk core.Skill, e *core.Enablement, lead func()) {
 	t := c.Theme()
-	busy := a.busy[sk.Path]
+	busy := a.working(c, sk.Path)
 	// The controls move under the lead when the pane is narrow.
 	ui.Row(c.Key(p.scope.Root+"\x00"+sk.Path)).Wrap().Justify(ui.End).GapX(10).GapY(6).AlignItems(ui.Center).Padding(8, 12).Children(func() {
 		ui.Row(c).Grow(1).MinWidth(180).Gap(10).AlignItems(ui.Center).Children(lead)
@@ -59,7 +59,7 @@ func placeLead(c *ui.Context, sc core.Scope) func() {
 // modeChip shows the mode of an enablement, and switches it.
 func (a *app) modeChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablement, busy bool) {
 	label := map[core.Mode]string{core.Link: "Link", core.Copy: "Copy", core.Mixed: "Mixed"}[e.Mode]
-	chip(c, label).Label("Mode").Disabled(busy).PopoverMenuButton(func(m *ui.Menu) {
+	chip(c, label).Label("Mode").Value(label).Disabled(busy).PopoverMenuButton(func(m *ui.Menu) {
 		if m.Item("Link").Radio(e.Mode == core.Link).Chosen() && e.Mode != core.Link {
 			a.convert(p.scope, sk, e, core.Link)
 		}
@@ -74,7 +74,8 @@ func (a *app) modeChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablemen
 // placement, so they are one item.
 func (a *app) agentsChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablement, busy bool) {
 	key := p.scope.Root + "\x00" + sk.Path
-	b := chip(c, a.data.agentNames(placedAgents(e))).Label("Agents").Disabled(busy).MaxWidth(220).MinWidth(60).Shrink(1)
+	names := a.data.agentNames(placedAgents(e))
+	b := chip(c, names).Label("Agents").Value(names).Role(ui.RolePopUpButton).Expanded(a.agentsOpen && a.agentsFor == key).Disabled(busy).MaxWidth(220).MinWidth(60).Shrink(1)
 	if b.Clicked() {
 		a.agentsOpen = !a.agentsOpen || a.agentsFor != key
 		a.agentsFor = key
@@ -88,9 +89,11 @@ func (a *app) agentsChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablem
 				placed := slices.ContainsFunc(e.Placements, func(pl core.Placement) bool {
 					return slices.ContainsFunc(pl.Agents, func(id string) bool { return slices.Contains(d.Agents, id) })
 				})
-				on := placed
+				control := key + "\x00" + d.Path
+				on := a.toggled(control, sk.Path, placed)
 				ui.Column(c.Key(d.Path)).Gap(2).Children(func() {
 					if ui.Checkbox(c, &on, a.data.agentNames(d.Agents)).Disabled(busy).Changed() {
+						a.intents[control] = on
 						if on {
 							a.enable(p.scope, sk, core.EnableOptions{Agents: d.Agents})
 						} else {

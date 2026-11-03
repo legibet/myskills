@@ -522,9 +522,10 @@ Find
 - Results beside the preview of the selected one (its SKILL.md: from skills.sh for search
   results, from the files for a fetched source). A row: name, source and installs (the
   description, for a fetched source, which the bar under the field names), and `Add`, or its
-  state: `In Library`, `Added`, `Conflict`, `Invalid`. Adding asks nothing (the button says
-  what it does, the preview where from) and never enables; the preview of a skill added or in
-  the library offers `Show in Skills`, where it is enabled. A fetched folder also offers `Link
+  state: `In Library`, `Added`, `Conflict` (the library has a skill of that name from another
+  source), `Invalid`. Adding asks nothing (the button says what it does, the preview where
+  from) and never enables; the preview of a skill added or in the library offers `Show in
+  Skills`, which scrolls to it there, where it is enabled. A fetched folder also offers `Link
   Folder` (§5 `--link`), which shows `Linked` once the library has it.
 - While a new search runs, the last results stay, dimmed, and can't be added.
 - A fetched checkout is removed when the query changes, once the adds from it are done, and on
@@ -539,8 +540,11 @@ Agents
 Feedback and work
 - A change shows in place. Errors open an alert naming what failed; warnings (e.g. the git
   exclude) and outcomes with nothing changed ("tdd is up to date") show in a toast.
-- Work runs off the main thread; while it runs for a skill or a place, their controls are
-  disabled with a spinner. Quitting cancels network work and waits for changes in flight.
+- Work runs off the main thread. A skill or a place takes one change at a time, which holds
+  until the read after it completes, so no control shows the state before the change; a
+  switch or check box shows what it was set to meanwhile. Work running past 300 ms disables
+  their controls with a spinner (sooner, it would only flicker). Quitting cancels network
+  work and waits for changes in flight.
 
 Release: `make publish` also builds the app (`go tool mygo build app`, configured by
 `app/mygo.json`) and uploads it under names without its version: `MySkills.dmg` (macOS,

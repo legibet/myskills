@@ -110,14 +110,14 @@ func (a *app) placeDetail(c *ui.Context, p *place) {
 						muted(c, tilde(p.scope.Root)).FontSize(12).Selectable()
 					}
 				})
-				if a.busy[key] {
+				if a.working(c, key) {
 					ui.Spinner(c).Label("Working")
 				}
 				if p.err != nil {
 					return
 				}
 				if refreshable(p) {
-					ui.Button(c, "").Gap(6).Disabled(a.busy[key]).Children(func() {
+					ui.Button(c, "").Gap(6).Disabled(a.working(c, key)).Children(func() {
 						ui.Icon(c, iconRefresh)
 						ui.Text(c, "Refresh Copies")
 					}).OnClick(func() {
@@ -127,7 +127,7 @@ func (a *app) placeDetail(c *ui.Context, p *place) {
 				if !p.scope.IsGlobal() {
 					iconButton(c, iconFolder, "Reveal in Finder").OnClick(func() { a.desk.reveal(p.scope.Root) })
 				}
-				ui.PrimaryButton(c, "Add Skills…").Disabled(a.busy[key]).OnClick(func() { a.openAddSkills(p.scope) })
+				ui.PrimaryButton(c, "Add Skills…").Disabled(a.working(c, key)).OnClick(func() { a.openAddSkills(p.scope) })
 			})
 			if p.err != nil {
 				note(c, "Couldn't read this place: "+p.err.Error())
@@ -188,7 +188,7 @@ func (a *app) brokenLinks(c *ui.Context, p *place) {
 						ui.Text(c, b.Name).Bold().SingleLine()
 						muted(c, tilde(b.Path)+" → "+b.Skill+", missing from the library").FontSize(12).SingleLine()
 					})
-					if a.busy["broken:"+b.Path] {
+					if a.working(c, "broken:"+b.Path) {
 						ui.Spinner(c).Label("Working")
 						return
 					}

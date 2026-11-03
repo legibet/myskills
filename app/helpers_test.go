@@ -72,6 +72,7 @@ func (h *harness) start() *harness {
 		open:         func(path string) { h.opened = append(h.opened, path) },
 	}
 	h.a = newApp(h.svc, desk, h.post)
+	h.a.reload()
 	h.t.Cleanup(h.a.close)
 	h.tt = ui.NewTester(h.a.view, 1200, 800)
 	h.settle()

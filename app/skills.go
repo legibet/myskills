@@ -21,6 +21,7 @@ type skillsPage struct {
 	list   ui.ListState
 	sel    int    // the row chosen
 	path   string // the skill chosen, kept as the rows change
+	reveal bool   // scroll the list to the skill chosen, chosen from another page
 	split  float32
 	md     markdown.Options
 }
@@ -34,7 +35,7 @@ const (
 // show chooses a skill on the Skills page.
 func (a *app) show(path string) {
 	a.page = pageSkills
-	a.skills.path = path
+	a.skills.path, a.skills.reveal = path, true
 	a.skills.query, a.skills.filter = "", showAll
 }
 
@@ -83,6 +84,10 @@ func (a *app) skillsView(c *ui.Context) {
 			s.Selected = &a.skills.sel
 			s.Key = func(i int) any { return rows[i].Path }
 			s.Label = func(i int) string { return rows[i].Name }
+			if a.skills.reveal {
+				s.ScrollTo(a.skills.sel, ui.Center)
+				a.skills.reveal = false
+			}
 			list := ui.List(c, s, len(rows)).Grow(1).Padding(6).Gap(2).Label("Skills")
 			list.Rows(func(r ui.ListRow) { a.skillRow(r.Context, rows[r.Index], r.Selected()) })
 			list.Children(func() {
@@ -241,13 +246,13 @@ func webURL(sk core.Skill) string {
 // skillActions are the title's buttons: Update when the last check found
 // one, and the other actions in a menu.
 func (a *app) skillActions(c *ui.Context, sk core.Skill) {
-	if a.busy[sk.Path] {
+	if a.working(c, sk.Path) {
 		ui.Spinner(c).Label("Working")
 	}
 	if a.updates.checks[sk.Path].State == core.Available {
-		ui.PrimaryButton(c, "Update").Label("Update " + sk.Name).Disabled(a.busy[sk.Path]).OnClick(func() { a.update(sk) })
+		ui.PrimaryButton(c, "Update").Label("Update " + sk.Name).Disabled(a.working(c, sk.Path)).OnClick(func() { a.update(sk) })
 	}
-	iconButton(c, iconMore, "More").Disabled(a.busy[sk.Path]).PopoverMenuButton(func(m *ui.Menu) {
+	iconButton(c, iconMore, "More").Disabled(a.working(c, sk.Path)).PopoverMenuButton(func(m *ui.Menu) {
 		if m.Item("Update").Disabled(!sk.Updatable() && !hasCopies(a.data.usedIn(sk.Path), sk.Path)).Chosen() {
 			a.update(sk)
 		}
@@ -319,7 +324,7 @@ func (a *app) offRow(c *ui.Context, p *place, sk core.Skill) {
 	ui.Row(c.Key("off")).Gap(10).AlignItems(ui.Center).Padding(8, 12).Children(func() {
 		ui.Row(c).Grow(1).MinWidth(0).Gap(10).AlignItems(ui.Center).Children(placeLead(c, p.scope))
 		muted(c, "Not enabled")
-		ui.Button(c, "Enable").Padding(3, 10).Disabled(a.busy[sk.Path]).OnClick(func() {
+		ui.Button(c, "Enable").Padding(3, 10).Disabled(a.working(c, sk.Path)).OnClick(func() {
 			a.enable(p.scope, sk, core.EnableOptions{Mode: core.Link})
 		})
 	})
@@ -330,7 +335,7 @@ func (a *app) offRow(c *ui.Context, p *place, sk core.Skill) {
 func (a *app) enableInProject(c *ui.Context, sk core.Skill) {
 	t := c.Theme()
 	ui.Row(c.Key("add")).Padding(6, 8).Children(func() {
-		ui.Button(c, "").Padding(3, 6).Gap(6).Background(ui.Transparent).BorderWidth(0).Disabled(a.busy[sk.Path]).Children(func() {
+		ui.Button(c, "").Padding(3, 6).Gap(6).Background(ui.Transparent).BorderWidth(0).Disabled(a.working(c, sk.Path)).Children(func() {
 			ui.Icon(c, iconAdd).TextColor(t.Accent)
 			ui.Text(c, "Enable in Project…").TextColor(t.Accent)
 		}).PopoverMenuButton(func(m *ui.Menu) {
@@ -353,20 +358,14 @@ func (a *app) enableInProject(c *ui.Context, sk core.Skill) {
 
 // chooseProject asks for a folder, and gives fn its project (§6 Scope).
 func (a *app) chooseProject(fn func(core.Scope)) {
-	go func() {
-		dir := a.desk.chooseFolder("Choose a project folder")
-		if dir == "" {
+	a.chooseFolder("Choose a project folder", func(dir string) {
+		sc, err := a.svc.ProjectScope(dir)
+		if err != nil {
+			a.fail("Can't enable skills in "+tilde(dir), err)
 			return
 		}
-		sc, err := a.svc.ProjectScope(dir)
-		a.post(func() {
-			if err != nil {
-				a.fail("Can't enable skills in "+tilde(dir), err)
-				return
-			}
-			fn(sc)
-		})
-	}()
+		fn(sc)
+	})
 }
 
 // hasCopies reports whether a skill has copy placements in the places.
@@ -440,9 +439,9 @@ func (a *app) updateActions(c *ui.Context) {
 		return
 	}
 	if n := a.updates.available(); n > 0 && a.updates.u != nil {
-		ui.PrimaryButton(c, fmt.Sprintf("Update All (%d)", n)).Disabled(a.busy["updates"]).OnClick(a.updateAll)
+		ui.PrimaryButton(c, fmt.Sprintf("Update All (%d)", n)).Disabled(a.working(c, "updates")).OnClick(a.updateAll)
 	}
-	ui.Button(c, "").Gap(6).Disabled(a.busy["updates"] || !a.data.read).Children(func() {
+	ui.Button(c, "").Gap(6).Disabled(a.working(c, "updates") || !a.data.read).Children(func() {
 		ui.Icon(c, iconRefresh)
 		ui.Text(c, "Check for Updates").SingleLine()
 	}).OnClick(a.checkUpdates)
@@ -517,13 +516,6 @@ func (a *app) update(sk core.Skill) {
 		}
 		sc := places[i]
 		o := a.refresh(sc, []string{sk.Path}, sk.Path, "Couldn't refresh the copies of "+sk.Name+" in "+placeName(sc))
-		if p, ok := a.data.place(sc); ok {
-			// The last read may predate the update, which made every copy
-			// outdated: name each modified one.
-			if e, ok := p.enablement(sk.Path); ok {
-				o.discard = lossText(e.Placements)
-			}
-		}
 		o.then = func() { copies(i + 1) }
 		a.start(o, false)
 	}

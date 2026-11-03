@@ -366,22 +366,16 @@ func (a *app) fetchDone(seq int, f *core.Fetched, docs map[string]preview, err e
 // chooseSource asks for a folder and fetches it. The path names a source
 // even when it has spaces, which a typed query doesn't (source.IsExplicit).
 func (a *app) chooseSource() {
-	go func() {
-		dir := a.desk.chooseFolder("Choose a skill, or a folder of skills")
-		if dir == "" {
+	a.chooseFolder("Choose a skill, or a folder of skills", func(dir string) {
+		spec, err := source.Parse(dir)
+		if err != nil {
+			a.fail("Can't read "+tilde(dir), err)
 			return
 		}
-		a.post(func() {
-			spec, err := source.Parse(dir)
-			if err != nil {
-				a.fail("Can't read "+tilde(dir), err)
-				return
-			}
-			a.find.query = dir
-			a.leaveQuery()
-			a.fetch(spec)
-		})
-	}()
+		a.find.query = dir
+		a.leaveQuery()
+		a.fetch(spec)
+	})
 }
 
 // loadPreview loads the SKILL.md of a search result from skills.sh. Only
@@ -431,6 +425,11 @@ func (a *app) rowState(r findRow) (state, path string) {
 			if sk, ok := core.Installed(a.data.lib, spec.URL, r.res.SkillID); ok {
 				return stateInLibrary, sk.Path
 			}
+		}
+		// The library keeps a skill under its name: one from another source
+		// has it already (§5 Install).
+		if _, ok := a.data.skill(r.res.SkillID); ok {
+			return stateConflict, r.res.SkillID
 		}
 		return "", ""
 	}
@@ -578,7 +577,7 @@ func (a *app) sourceBar(c *ui.Context) {
 		})
 		key := "link:" + spec.Path
 		switch {
-		case a.busy[findFetch], a.busy[key]:
+		case a.busy[findFetch], a.working(c, key):
 			ui.Spinner(c).Label("Working")
 		case !p.browsing:
 			ui.PrimaryButton(c, "Fetch").Padding(3, 10).OnClick(func() { a.fetch(spec) })
@@ -613,7 +612,7 @@ func (a *app) findRowView(c *ui.Context, r findRow, chosen bool) {
 			ui.Text(c, r.name()).FontWeight(600).SingleLine()
 			ui.Text(c, from).FontSize(12).TextColor(sub).SingleLine()
 		})
-		if a.busy[r.key()] {
+		if a.working(c, r.key()) {
 			ui.Spinner(c).Label("Adding")
 			return
 		}
@@ -669,7 +668,7 @@ func (a *app) findDetail(c *ui.Context, r findRow) {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					ui.Text(c, r.name()).FontSize(20).Bold().Grow(1).Selectable()
 					switch {
-					case a.busy[key]:
+					case a.working(c, key):
 						ui.Spinner(c).Label("Adding")
 					case state == "":
 						ui.PrimaryButton(c, "Add to Library").Disabled(r.res != nil && a.stale()).OnClick(func() { a.add(r) })
@@ -685,13 +684,11 @@ func (a *app) findDetail(c *ui.Context, r findRow) {
 				}
 				a.origin(c, r)
 			})
-			if r.cand != nil {
-				switch state {
-				case stateConflict:
-					note(c, "The library already has "+path+" from another source under this name.")
-				case stateInvalid:
-					note(c, "This skill can't be added: "+r.cand.Issue)
-				}
+			switch state {
+			case stateConflict:
+				note(c, "The library already has "+path+" from another source under this name.")
+			case stateInvalid:
+				note(c, "This skill can't be added: "+r.cand.Issue)
 			}
 			switch {
 			case !loaded:

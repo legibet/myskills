@@ -319,3 +319,17 @@ func TestFindLinksChosenFolder(t *testing.T) {
 	h.want("Linked", "In Library")
 	h.wantNo("Link Folder")
 }
+
+func TestFindMarksNameConflicts(t *testing.T) {
+	h, _ := findHarness(t)
+	h.add(h.repo("mine", map[string]string{"lint": "skills/lint"}))
+	h.start()
+	h.openFind()
+	h.typeText("review")
+	h.want("Conflict")
+	if _, ok := h.tt.Find("Add lint"); ok {
+		t.Error("a skill whose name the library has offers Add")
+	}
+	h.click("lint")
+	h.want("The library already has lint from another source under this name.")
+}

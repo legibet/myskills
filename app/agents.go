@@ -77,20 +77,22 @@ func (a *app) agentRow(c *ui.Context, ag agent.Agent) {
 			}
 			dir("Global", global)
 		})
-		on := isDefault
+		control := "default:" + ag.ID
+		on := a.toggled(control, "agents", isDefault)
 		last := isDefault && len(a.data.defaults) == 1
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 			muted(c, "Default").FontSize(12)
-			sw := ui.Switch(c, &on).Label("Default for " + ag.Name).Disabled(last || a.busy["agents"])
+			sw := ui.Switch(c, &on).Label("Default for " + ag.Name).Disabled(last || a.working(c, "agents"))
 			if last {
 				sw.Tooltip("New enablements need at least one agent")
 			}
 			if sw.Changed() {
+				a.intents[control] = on
 				a.setDefault(ag.ID, on)
 			}
 		})
 		if !builtin {
-			iconButton(c, iconDisable, "Remove "+ag.Name+"…").Disabled(a.busy["agents"]).OnClick(func() { a.confirmRemoveAgent(ag) })
+			iconButton(c, iconDisable, "Remove "+ag.Name+"…").Disabled(a.working(c, "agents")).OnClick(func() { a.confirmRemoveAgent(ag) })
 		}
 	})
 }
