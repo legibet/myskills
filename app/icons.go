@@ -34,5 +34,5 @@ var (
 	iconWarning  = icon("triangle-alert")
 	iconFolder   = icon("folder-open")
 	iconLink     = icon("link")
-	iconChevron  = icon("chevron-down")
+	iconChevrons = icon("chevrons-up-down")
 )

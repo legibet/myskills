@@ -453,16 +453,17 @@ follows the same rules as the CLI and TUI (modes, confirmations, update and copy
 adding never enables).
 
 ```
-┌──────────┬─────────────────────────────┬───────────────────────────────────────────┐
-│ Skills  2│ [Search]    All Enabled Unused│ review                    [Update]  [⋯] │
-│ Projects │ review                Update │ Review code changes for bugs…             │
-│ Find     │ agent-skills · Global, 2 proj│ agent-skills/review                       │
-│ Agents   │ pdf                          │ ENABLED IN                                │
-│          │ anthropics/skills · Not enab…│ Global     [Link ▾] [Universal, Claude ▾] ✕│
-│          │                              │ opcode     [Copy ▾] [Universal ▾] Outdated │
-│          │                              │ + Enable in Project…                      │
-│          │                              │ SKILL.md (rendered)                       │
-└──────────┴──────────────────────────────┴───────────────────────────────────────────┘
+┌───────────┬────────────────────────────┬────────────────────────────────────────────┐
+│ ● ● ●     │ Skills                  [↻] │                           [Update]  [⋯]  │
+│           │ 12 skills · 1 update        │ review                                     │
+│ Skills   1│ [Search]                    │ agent-skills ↗ · ~/.myskills/skills/review │
+│ Projects  │ [ All | Enabled | Unused ]  │ Review code changes for bugs…              │
+│ Find      │ review              Update  │ Enabled in                                 │
+│ Agents    │ agent-skills · Global, 2 pr…│ ┌ Global       [Link ⇕] [Universal +1 ⇕] ✕┐ │
+│           │ pdf                         │ │ web-app  Outdated Refresh [Copy ⇕] …   ✕│ │
+│           │ anthropics/skills · Not en… │ └ + Enable in Project…                    ┘ │
+│           │                             │ SKILL.md (rendered)                        │
+└───────────┴─────────────────────────────┴────────────────────────────────────────────┘
 ```
 
 Window and data
@@ -475,14 +476,21 @@ Window and data
   again when the app becomes active and after each change; the pages keep showing the last
   read meanwhile. A project left with nothing enabled leaves the list (§3), as in the CLI.
 - `⌘1`–`⌘4` choose the pages, `⌘F` focuses the page's search field.
+- Layout: a page is a list beside a detail (Agents is one column). The list's bar, in the
+  title bar's height, names the page with a count line and holds the page's actions; the
+  detail's bar holds the actions on what it shows (primary last, the rest in a `⋯` menu or
+  icon buttons with tooltips). Groups of rows (`Enabled in`, a place's skills, the agents)
+  are cards with hairline separators. Menus are native. The list's selection is the accent
+  while the list has the keyboard, gray otherwise. Light and dark follow the system, the
+  accent too; the look is defined once in `app/style.go`.
 
 Skills
 - The list: every library skill, filtered by a search field (name, description, source) and
   `All` / `Enabled` (anywhere) / `Unused` (nowhere). A row: the name (the library path too
   when names repeat, §8), badges (`Invalid`, `Update`, `Outdated`, `Modified`), and the
   source label with where it is enabled (`Global, 2 projects`, `Not enabled`).
-- The title bar: `Check for Updates` (every updatable skill; progress while it runs), then
-  `Update All` while the check found updates.
+- The list's bar: `Check for Updates` (every updatable skill; progress while it runs), then
+  `Update All` while the check found updates; its count line says how many.
 - The selected skill: name, description, source (a link to the repository page for git
   sources) and library path; `Update` while the last check found one; a `⋯` menu: Update,
   Reveal in Finder, Open SKILL.md, Remove from Library…. Notes: why it is invalid,
@@ -497,16 +505,19 @@ Skills
   applies every update found, then refreshes the outdated copies of the updated skills.
 
 Placement rows (in a skill's `Enabled in`, and in a place's list on Projects)
-- The place (or the skill, on Projects), a mode menu (`Link`, `Copy`; `Mixed` shows as is),
-  an agents menu (a check box per agent skill directory; agents sharing one are one item, as
-  in the TUI's `a`), the state (`Outdated` with `Refresh`, `Modified`), and `Disable`.
+- The place (or the skill, on Projects), the state (`Outdated` with `Refresh`, `Modified`), a
+  mode menu (`Link`, `Copy`; `Mixed` shows as is), an agents popover (a check box per agent
+  skill directory; agents sharing one are one item, as in the TUI's `a`; the button names
+  up to two agents, else the first and how many more), and `Disable in <place>` (✕). The
+  controls wrap under the place when the pane is narrow.
   Global without the skill shows `Not enabled` and `Enable` (link, default agents).
 - An action that deletes copies (disabling, switching to links, unchecking an agent) asks
   first, naming them; for modified copies it says their changes are lost.
 
 Projects
 - The list: Global and the known projects (name, path, how many skills, a badge when one
-  needs attention). The selected place: name and path, Reveal in Finder, `Add Skills…` (a
+  needs attention). The selected place: name and path, Reveal in Finder (Show in Folder off
+  macOS), `Add Skills…` (a
   searchable checklist of the library skills it doesn't have, a mode, `Enable`), and
   `Refresh Copies` while some copies are outdated and unmodified.
 - Then its skills as placement rows (the name opens it on Skills), its broken links

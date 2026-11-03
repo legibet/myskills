@@ -83,12 +83,12 @@ func TestDisableCopyAsks(t *testing.T) {
 	h.enable(proj, "review", core.EnableOptions{Mode: core.Copy})
 	h.start()
 
-	h.click("Disable")
+	h.click("Disable in web")
 	h.dismiss("Disable review in web?")
 	if got := h.enabled(proj); len(got) != 1 {
 		t.Fatalf("disabled without confirming: %v", got)
 	}
-	h.click("Disable")
+	h.click("Disable in web")
 	h.confirm("Disable review in web?")
 	if got := h.enabled(proj); len(got) != 0 {
 		t.Fatalf("project = %v, want nothing", got)
@@ -105,7 +105,7 @@ func TestDisableModifiedCopyDiscards(t *testing.T) {
 	h.start()
 	h.want("Modified")
 
-	h.click("Disable")
+	h.click("Disable in web")
 	h.confirm("Discard local changes?")
 	if _, err := os.Stat(copied); !os.IsNotExist(err) {
 		t.Fatalf("modified copy left: %v", err)
@@ -159,7 +159,7 @@ func TestUpdateRefreshesCopies(t *testing.T) {
 	h.start()
 
 	h.click("Check for Updates")
-	h.want("Update All (1)", "Update review")
+	h.want("Update All", "1 update available", "Update review")
 	if n := h.a.updates.available(); n != 1 {
 		t.Fatalf("available = %d, want 1", n)
 	}
@@ -174,7 +174,7 @@ func TestUpdateRefreshesCopies(t *testing.T) {
 	if body, _ := os.ReadFile(filepath.Join(pl.Path, "SKILL.md")); !strings.Contains(string(body), "The new body.") {
 		t.Errorf("copy not refreshed: %s", body)
 	}
-	h.wantNo("Update All (1)")
+	h.wantNo("Update All")
 }
 
 func TestUpdateAll(t *testing.T) {
@@ -187,7 +187,7 @@ func TestUpdateAll(t *testing.T) {
 	h.start()
 
 	h.click("Check for Updates")
-	h.click("Update All (2)")
+	h.click("Update All")
 	for _, name := range []string{"review", "tdd"} {
 		if body, _ := os.ReadFile(filepath.Join(h.skill(name).Dir, "SKILL.md")); !strings.Contains(string(body), "New "+name+".") {
 			t.Errorf("%s not updated: %s", name, body)
@@ -230,7 +230,7 @@ func TestUpdateAllSkipsLocalChanges(t *testing.T) {
 	h.start()
 
 	h.click("Check for Updates")
-	h.click("Update All (2)")
+	h.click("Update All")
 	h.wantAlert("Some updates were skipped")
 	if msg := h.a.alerts[0].message; !strings.Contains(msg, "tdd has local changes in the library") {
 		t.Errorf("message = %q", msg)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -28,9 +29,12 @@ const (
 )
 
 const (
-	titleBarHeight = 52 // the hidden title bar, which the window controls sit in
-	sidebarWidth   = 196
+	sidebarWidth = 216
+	listWidth    = 300 // the list column of a page, at first
 )
+
+// revealLabel is what showing a file in the file manager is called.
+var revealLabel = map[bool]string{true: "Reveal in Finder", false: "Show in Folder"}[runtime.GOOS == "darwin"]
 
 // desktop is what the app asks of the system, faked in tests.
 type desktop struct {
@@ -74,9 +78,7 @@ type app struct {
 func newApp(svc *core.Service, desk desktop, post func(func())) *app {
 	a := &app{svc: svc, desk: desk, post: post, busy: map[string]bool{}, busySince: map[string]time.Time{}, intents: map[string]bool{}, page: pageSkills}
 	a.ctx, a.cancel = context.WithCancel(context.Background())
-	a.skills.split = 300
-	a.projects.split = 260
-	a.find.split = 360
+	a.skills.split, a.projects.split, a.find.split = listWidth, listWidth, listWidth
 	return a
 }
 
@@ -413,14 +415,15 @@ func (a *app) toast(text, kind string) {
 }
 
 func (a *app) view(c *ui.Context) {
-	t := c.Theme()
+	applyTheme(c)
+	p := colors(c)
 	vibrant := c.Vibrancy()
 	if vibrant {
 		c.Root().Background(ui.Transparent)
 	}
-	for key, p := range map[ui.Key]string{ui.Key1: pageSkills, ui.Key2: pageProjects, ui.Key3: pageFind, ui.Key4: pageAgents} {
+	for key, page := range map[ui.Key]string{ui.Key1: pageSkills, ui.Key2: pageProjects, ui.Key3: pageFind, ui.Key4: pageAgents} {
 		if c.Shortcut(ui.Cmd, key) {
-			a.page = p
+			a.page = page
 		}
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyF) {
@@ -429,11 +432,13 @@ func (a *app) view(c *ui.Context) {
 	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
 		side := ui.Column(c).Width(sidebarWidth).Shrink(0)
 		if !vibrant {
-			side.Background(t.Surface)
+			side.Background(p.sidebar)
 		}
-		side.Children(func() { a.sidebar(c, vibrant) })
-		ui.Box(c).Width(1).Background(t.Border)
-		ui.Column(c).Grow(1).MinWidth(0).Background(t.Background).Children(func() {
+		side.Children(func() { a.sidebar(c) })
+		ui.Box(c).Width(1).Shrink(0).Background(p.separator)
+		// Keyed by page, so that no element of one page is taken for one of
+		// another: a field there autofocuses as it appears.
+		ui.Column(c.Key(a.page)).Grow(1).MinWidth(0).Background(p.content).Children(func() {
 			switch a.page {
 			case pageProjects:
 				a.projectsView(c)
@@ -453,46 +458,97 @@ func (a *app) view(c *ui.Context) {
 	a.toasts = nil
 }
 
-func (a *app) sidebar(c *ui.Context, vibrant bool) {
-	ui.Box(c).Height(titleBarHeight).Shrink(0).DragWindow()
-	count := func(n int) func() {
-		return func() {
-			if n > 0 {
-				ui.Badge(c, strconv.Itoa(n))
-			}
-		}
-	}
+// sidebar is the pages, under the window controls: Skills counts the
+// updates found, Projects the places that need attention.
+func (a *app) sidebar(c *ui.Context) {
+	p := colors(c)
 	attention := 0
 	for i := range a.data.places {
 		if a.data.places[i].attention() > 0 {
 			attention++
 		}
 	}
-	list := ui.Sidebar(c, &a.page, func() {
-		ui.SidebarItem(c, pageSkills, iconSkills, "Skills").Children(count(a.updates.available()))
-		ui.SidebarItem(c, pageProjects, iconProjects, "Projects").Children(count(attention))
-		ui.SidebarItem(c, pageFind, iconFind, "Find")
-		ui.SidebarItem(c, pageAgents, iconAgents, "Agents")
-	}).Grow(1).Label("Pages")
-	if vibrant {
-		list.Background(ui.Transparent)
-	}
+	ui.Box(c).Height(barHeight).Shrink(0).DragWindow()
+	ui.Column(c).Padding(0, 10).Gap(2).Role(ui.RoleTabList).Label("Pages").Children(func() {
+		a.navItem(c, pageSkills, iconSkills, "Skills", a.updates.available(), accent(c))
+		a.navItem(c, pageProjects, iconProjects, "Projects", attention, p.orange)
+		a.navItem(c, pageFind, iconFind, "Find", 0, ui.Color{})
+		a.navItem(c, pageAgents, iconAgents, "Agents", 0, ui.Color{})
+	})
+	ui.Box(c).Grow(1).DragWindow()
 }
 
-// header is a page's title bar: its title, and actions at the end. It drags
-// the window.
-func header(c *ui.Context, title string, actions func()) {
-	bar := c.TitleBar()
-	ui.Row(c).Height(titleBarHeight).Shrink(0).AlignItems(ui.Center).Gap(8).
-		Padding(0, bar.Right+16, 0, 20).DragWindow().Children(func() {
-		ui.Text(c, title).FontSize(15).Bold().SingleLine()
-		ui.Spacer(c)
-		if actions != nil {
-			actions()
+// navItem is a page in the sidebar, chosen as the pointer goes down, with
+// a count of what needs a look there.
+func (a *app) navItem(c *ui.Context, page string, icon *ui.SVG, label string, count int, countColor ui.Color) {
+	p := colors(c)
+	on := a.page == page
+	b := ui.ButtonBase(c.Key(page)).Height(30).Padding(0, 8).Radius(6).Gap(8).AlignItems(ui.Center).
+		Label(label).Role(ui.RoleTab).Checked(on).FocusRing(false)
+	if (b.Pressed() || b.Clicked()) && !on {
+		a.page, on = page, true
+	}
+	bg := ui.Transparent
+	switch {
+	case on:
+		bg = p.navSelected
+	case b.Hovered():
+		bg = p.hover
+	}
+	b.Background(b.AnimateColor("bg", bg, hoverAnimation)).Children(func() {
+		ic := ui.Icon(c, icon).Size(16, 16).Shrink(0).TextColor(p.text2)
+		if on {
+			ic.TextColor(accent(c))
+		}
+		ui.Text(c, label).Grow(1).FontWeight(500).SingleLine()
+		if count > 0 {
+			ui.Text(c, strconv.Itoa(count)).FontSize(textCaption).FontWeight(600).FontFeatures("tnum").TextColor(countColor)
 		}
 	})
-	ui.Divider(c)
 }
+
+// detailBar is the bar over a detail pane, with the actions on what it
+// shows at its end, clear of the window controls there.
+func detailBar(c *ui.Context, actions func()) {
+	bar(c).Padding(0, max(14, c.TitleBar().Right+10), 0, 14).Children(func() {
+		ui.Spacer(c)
+		actions()
+	})
+}
+
+// detailPane is the scrolling content of a detail pane, under its bar.
+func detailPane(c *ui.Context, key string, content func()) {
+	ui.Scroll(c.Key(key)).Grow(1).MinHeight(0).Children(func() {
+		ui.Column(c).Padding(0, 32, 40, 32).Gap(28).MaxWidth(780).Children(content)
+	})
+}
+
+// detailHeader is the top of a detail pane: the title, the lines about it,
+// and the description.
+func detailHeader(c *ui.Context, title, description string, meta func()) {
+	p := colors(c)
+	ui.Column(c).Gap(8).Children(func() {
+		ui.Text(c, title).FontSize(textTitle).FontWeight(700).LetterSpacing(-0.3).Selectable()
+		if meta != nil {
+			ui.Row(c).Gap(6).Wrap().AlignItems(ui.Center).FontSize(textSmall).TextColor(p.text2).Children(meta)
+		}
+		if description != "" {
+			ui.Text(c, description).LineHeight(1.45).TextColor(p.text2).Margin(4, 0, 0, 0).Selectable()
+		}
+	})
+}
+
+// webLink is a link to a page in the browser, in a detail's meta line.
+func webLink(c *ui.Context, label, url string) {
+	linkButton(c, nil, label).FontSize(textSmall).Tooltip(url).Children(func() {
+		ui.Icon(c, iconExternal).Size(11, 11)
+	}).OnClick(func() { c.Services().OpenURL(url) })
+}
+
+// metaText is a part of a detail's meta line; dot separates the parts.
+func metaText(c *ui.Context, s string) { ui.Text(c, s).SingleLine().Selectable() }
+
+func dot(c *ui.Context) { ui.Text(c, "·").TextColor(colors(c).text3) }
 
 func (a *app) alertView(c *ui.Context) {
 	if len(a.alerts) == 0 {
@@ -508,42 +564,6 @@ func (a *app) alertView(c *ui.Context) {
 	if i >= 0 && al.choose != nil {
 		al.choose(i)
 	}
-}
-
-// muted is secondary text.
-func muted(c *ui.Context, s string) ui.Element {
-	return ui.Text(c, s).TextColor(c.Theme().TextMuted)
-}
-
-// iconButton is a button showing an icon, named for assistive technology and
-// in a tooltip.
-func iconButton(c *ui.Context, icon *ui.SVG, label string) ui.Element {
-	return ui.Button(c, "").Label(label).Tooltip(label).Padding(4, 6).Children(func() {
-		ui.Icon(c, icon)
-	})
-}
-
-// tag is a small colored label for a state, as "Outdated".
-func tag(c *ui.Context, text string, color ui.Color) ui.Element {
-	return ui.Badge(c, text).Background(color.Alpha(0.16)).TextColor(color)
-}
-
-// section is the small title over a group of rows.
-func section(c *ui.Context, title string) {
-	ui.Text(c, title).FontSize(12).FontWeight(600).TextColor(c.Theme().TextMuted)
-}
-
-// emptyState fills a pane that has nothing to show yet.
-func emptyState(c *ui.Context, title, detail string, actions func()) {
-	ui.Column(c).Grow(1).Center().Gap(8).Padding(24).Children(func() {
-		ui.Text(c, title).FontSize(15).Bold()
-		if detail != "" {
-			muted(c, detail).TextAlign(ui.Center).MaxWidth(360)
-		}
-		if actions != nil {
-			ui.Row(c).Gap(8).Margin(8, 0, 0, 0).Children(actions)
-		}
-	})
 }
 
 // tilde writes a path under the home directory with "~".

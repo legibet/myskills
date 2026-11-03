@@ -31,9 +31,8 @@ type addSkills struct {
 }
 
 func (a *app) projectsView(c *ui.Context) {
-	header(c, "Projects", nil)
 	if !a.data.read {
-		ui.Column(c).Grow(1).Center().Children(func() { ui.Spinner(c).Label("Loading") })
+		loading(c)
 		return
 	}
 	places := a.data.places
@@ -42,15 +41,20 @@ func (a *app) projectsView(c *ui.Context) {
 		a.projects.root = places[a.projects.sel].scope.Root
 	}
 	ui.Split(c, &a.projects.split, func() {
-		s := &a.projects.list
-		s.Selected = &a.projects.sel
-		s.Key = func(i int) any { return places[i].scope.Root }
-		s.Label = func(i int) string { return placeName(places[i].scope) }
-		list := ui.List(c, s, len(places)).Fill().Padding(6).Gap(2).Label("Places")
-		list.Rows(func(r ui.ListRow) { a.placeRow(r.Context, &places[r.Index], r.Selected()) })
-		if list.Changed() && a.projects.sel >= 0 && a.projects.sel < len(places) {
-			a.projects.root = places[a.projects.sel].scope.Root
-		}
+		ui.Column(c).Fill().Children(func() {
+			n := len(places) - 1
+			bar(c).Padding(0, 10, 0, 16).Children(func() {
+				paneTitle(c, "Projects", fmt.Sprintf("%d %s", n, plural(n, "project", "projects")))
+			})
+			s := &a.projects.list
+			s.Selected = &a.projects.sel
+			s.Key = func(i int) any { return places[i].scope.Root }
+			s.Label = func(i int) string { return placeName(places[i].scope) }
+			list := sourceList(c, s, len(places), "Places", func(i int, onAccent bool) { a.placeRow(c, &places[i], onAccent) })
+			if list.Changed() && a.projects.sel >= 0 && a.projects.sel < len(places) {
+				a.projects.root = places[a.projects.sel].scope.Root
+			}
+		})
 	}, func() {
 		if p, ok := a.data.place(core.Scope{Root: a.projects.root}); ok {
 			a.placeDetail(c, p)
@@ -60,94 +64,70 @@ func (a *app) projectsView(c *ui.Context) {
 }
 
 // placeRow is a place in the list: its name and path, how many skills it
-// has, and whether one needs attention.
-func (a *app) placeRow(c *ui.Context, p *place, chosen bool) {
-	t := c.Theme()
-	sub := t.TextMuted
-	if chosen {
-		sub = t.AccentText.Alpha(0.8)
+// has, and how many need attention.
+func (a *app) placeRow(c *ui.Context, p *place, onAccent bool) {
+	where := "Every project"
+	if !p.scope.IsGlobal() {
+		where = tilde(p.scope.Root)
 	}
-	icon := iconProject
-	if p.scope.IsGlobal() {
-		icon = iconGlobal
-	}
-	ui.Row(c).Padding(7, 10).Gap(10).AlignItems(ui.Center).Children(func() {
-		ui.Icon(c, icon).TextColor(sub)
-		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, placeName(p.scope)).FontWeight(600).SingleLine().Grow(1)
-				if n := p.attention(); n > 0 {
-					if chosen {
-						ui.Badge(c, strconv.Itoa(n)).Background(t.AccentText.Alpha(0.2)).TextColor(t.AccentText)
-					} else {
-						tag(c, strconv.Itoa(n), t.Warning)
-					}
-				}
-			})
-			where := "Every project"
-			if !p.scope.IsGlobal() {
-				where = tilde(p.scope.Root)
-			}
-			n := len(p.status.Enablements)
-			ui.Text(c, fmt.Sprintf("%s · %d %s", where, n, plural(n, "skill", "skills"))).FontSize(12).TextColor(sub).SingleLine()
-		})
-	})
+	n := len(p.status.Enablements)
+	listRow(c, onAccent, func() {
+		ui.Text(c, placeName(p.scope)).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+		if k := p.attention(); k > 0 {
+			rowTag(c, strconv.Itoa(k), c.Theme().Warning, onAccent).Tooltip(fmt.Sprintf("%d %s attention", k, plural(k, "skill needs", "skills need")))
+		}
+	}, fmt.Sprintf("%d %s · %s", n, plural(n, "skill", "skills"), where))
 }
 
 // placeDetail is the place chosen: its skills, its broken links and the
 // entries myskills doesn't manage.
 func (a *app) placeDetail(c *ui.Context, p *place) {
-	t := c.Theme()
 	key := "place:" + p.scope.Root
-	ui.Scroll(c.Key(key)).Fill().Children(func() {
-		ui.Column(c).Padding(20, 24).Gap(18).MaxWidth(820).Children(func() {
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
-					ui.Text(c, placeName(p.scope)).FontSize(20).Bold().SingleLine()
-					if p.scope.IsGlobal() {
-						muted(c, "Skills every project gets, in the agents' global skill directories.").FontSize(12)
-					} else {
-						muted(c, tilde(p.scope.Root)).FontSize(12).Selectable()
-					}
+	busy := a.working(c, key)
+	ui.Column(c).Fill().Children(func() {
+		detailBar(c, func() {
+			if busy {
+				spinner(c, "Working")
+			}
+			if p.err != nil {
+				return
+			}
+			if refreshable(p) {
+				iconTextButton(c, iconRefresh, "Refresh Copies", plain).Disabled(busy).OnClick(func() {
+					a.start(a.refresh(p.scope, nil, key, "Couldn't refresh the copies in "+placeName(p.scope)), false)
 				})
-				if a.working(c, key) {
-					ui.Spinner(c).Label("Working")
-				}
-				if p.err != nil {
-					return
-				}
-				if refreshable(p) {
-					ui.Button(c, "").Gap(6).Disabled(a.working(c, key)).Children(func() {
-						ui.Icon(c, iconRefresh)
-						ui.Text(c, "Refresh Copies")
-					}).OnClick(func() {
-						a.start(a.refresh(p.scope, nil, key, "Couldn't refresh the copies in "+placeName(p.scope)), false)
-					})
-				}
+			}
+			if !p.scope.IsGlobal() {
+				toolButton(c, iconFolder, revealLabel).OnClick(func() { a.desk.reveal(p.scope.Root) })
+			}
+			button(c, "Add Skills…", primary).Disabled(busy).OnClick(func() { a.openAddSkills(p.scope) })
+		})
+		detailPane(c, key, func() {
+			description := ""
+			if p.scope.IsGlobal() {
+				description = "Skills every project gets, from the agents' global skill directories."
+			}
+			detailHeader(c, placeName(p.scope), description, func() {
 				if !p.scope.IsGlobal() {
-					iconButton(c, iconFolder, "Reveal in Finder").OnClick(func() { a.desk.reveal(p.scope.Root) })
+					metaText(c, tilde(p.scope.Root))
 				}
-				ui.PrimaryButton(c, "Add Skills…").Disabled(a.working(c, key)).OnClick(func() { a.openAddSkills(p.scope) })
 			})
 			if p.err != nil {
 				note(c, "Couldn't read this place: "+p.err.Error())
 				return
 			}
 			if len(p.status.Enablements) == 0 && len(p.status.Broken) == 0 && len(p.status.Others) == 0 {
-				muted(c, "No skills enabled here yet.").Padding(24, 0).TextAlign(ui.Center)
+				emptyState(c, "No skills here yet", "Add skills from your library to use them here.", nil)
 				return
 			}
 			if len(p.status.Enablements) > 0 {
-				ui.Column(c).Gap(8).Children(func() {
-					section(c, "Skills")
-					ui.Column(c).Radius(10).Border(1, t.Border).Dividers(1, t.Border).Children(func() {
-						for i := range p.status.Enablements {
-							e := &p.status.Enablements[i]
-							if sk, ok := a.data.skill(e.Skill); ok {
-								a.placementRow(c, p, sk, e, a.skillLead(c, sk))
-							}
+				group(c, "Skills", func(g *rowGroup) {
+					for i := range p.status.Enablements {
+						e := &p.status.Enablements[i]
+						if sk, ok := a.data.skill(e.Skill); ok {
+							a.placementRow(c, g, p, sk, e, a.skillLead(c, sk))
 						}
-					})
+					}
 				})
 			}
 			if len(p.status.Broken) > 0 {
@@ -157,19 +137,24 @@ func (a *app) placeDetail(c *ui.Context, p *place) {
 				unmanaged(c, p.status.Others)
 			}
 		})
-	}).Background(t.Background)
+	})
 }
 
-// skillLead is a placement row's lead on Projects: the skill, which opens
-// it on Skills.
+// skillLead is a placement row's lead on Projects: the skill, whose name
+// opens it on Skills.
 func (a *app) skillLead(c *ui.Context, sk core.Skill) func() {
 	return func() {
-		ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
-			ui.Button(c, "").Padding(0).Background(ui.Transparent).BorderWidth(0).AlignSelf(ui.Start).Tooltip("Show in Skills").Children(func() {
-				ui.Text(c, a.data.skillName(sk)).Bold().SingleLine()
+		p := colors(c)
+		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(2).Children(func() {
+			name := ui.ButtonBase(c).AlignSelf(ui.Start).MinWidth(0).Label(a.data.skillName(sk)).Tooltip("Show in Skills").Cursor(ui.CursorPointer)
+			name.Children(func() {
+				text := ui.Text(c, a.data.skillName(sk)).FontWeight(600).SingleLine()
+				if name.Hovered() {
+					text.TextColor(accent(c))
+				}
 			}).OnClick(func() { a.show(sk.Path) })
 			if sk.Description != "" {
-				muted(c, sk.Description).FontSize(12).SingleLine()
+				ui.Text(c, sk.Description).FontSize(textSmall).TextColor(p.text2).SingleLine()
 			}
 		})
 	}
@@ -177,54 +162,31 @@ func (a *app) skillLead(c *ui.Context, sk core.Skill) func() {
 
 // brokenLinks lists the links into the library whose skill is gone.
 func (a *app) brokenLinks(c *ui.Context, p *place) {
-	t := c.Theme()
-	ui.Column(c).Gap(8).Children(func() {
-		section(c, "Broken links")
-		ui.Column(c).Radius(10).Border(1, t.Border).Dividers(1, t.Border).Children(func() {
-			for _, b := range p.status.Broken {
-				ui.Row(c.Key(b.Path)).Gap(10).AlignItems(ui.Center).Padding(8, 12).Children(func() {
-					ui.Icon(c, iconWarning).TextColor(t.Danger)
-					ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
-						ui.Text(c, b.Name).Bold().SingleLine()
-						muted(c, tilde(b.Path)+" → "+b.Skill+", missing from the library").FontSize(12).SingleLine()
-					})
-					if a.working(c, "broken:"+b.Path) {
-						ui.Spinner(c).Label("Working")
-						return
-					}
-					ui.Button(c, "Remove").Padding(3, 10).OnClick(func() { a.removeBroken(p.scope, b) })
-				})
-			}
-		})
+	pal := colors(c)
+	group(c, "Broken links", func(g *rowGroup) {
+		for _, b := range p.status.Broken {
+			g.row(c.Key(b.Path)).Children(func() {
+				ui.Icon(c, iconWarning).Size(16, 16).Shrink(0).TextColor(pal.red)
+				rowText(c, b.Name, tilde(b.Path)+" → "+b.Skill+", missing from the library")
+				if a.working(c, "broken:"+b.Path) {
+					spinner(c, "Working")
+					return
+				}
+				button(c, "Remove", plain).OnClick(func() { a.removeBroken(p.scope, b) })
+			})
+		}
 	})
 }
 
 // unmanaged lists the entries myskills didn't make, which it never touches.
 func unmanaged(c *ui.Context, others []core.Placement) {
-	t := c.Theme()
-	ui.Column(c).Gap(8).Children(func() {
-		section(c, "Not managed by myskills")
-		ui.Column(c).Radius(10).Border(1, t.Border).Dividers(1, t.Border).Children(func() {
-			for _, o := range others {
-				ui.Column(c.Key(o.Path)).Gap(1).Padding(8, 12).Children(func() {
-					ui.Text(c, o.Name).SingleLine()
-					muted(c, tilde(o.Path)).FontSize(12).SingleLine().Selectable()
-				})
-			}
-		})
+	group(c, "Not managed by myskills", func(g *rowGroup) {
+		for _, o := range others {
+			g.row(c.Key(o.Path)).MinHeight(44).Children(func() {
+				rowText(c, o.Name, tilde(o.Path))
+			})
+		}
 	})
-}
-
-// refreshable reports whether a place has outdated copies Refresh Copies
-// replaces without asking.
-func refreshable(p *place) bool {
-	return slices.ContainsFunc(p.status.Enablements, func(e core.Enablement) bool {
-		return slices.ContainsFunc(e.Placements, func(pl core.Placement) bool { return pl.Outdated && !pl.Modified })
-	})
-}
-
-func (a *app) openAddSkills(sc core.Scope) {
-	a.projects.add = addSkills{open: true, scope: sc, picks: map[string]bool{}}
 }
 
 // addSkillsView is the Add Skills dialog: a searchable checklist of the
@@ -240,7 +202,7 @@ func (a *app) addSkillsView(c *ui.Context) {
 		d.open = false
 		return
 	}
-	t := c.Theme()
+	pal := colors(c)
 	q := strings.ToLower(strings.TrimSpace(d.query))
 	var rows []core.Skill
 	for _, sk := range a.data.lib {
@@ -258,46 +220,59 @@ func (a *app) addSkillsView(c *ui.Context) {
 		}
 	}
 	ui.Modal(c, &d.open, func() {
-		ui.Column(c).Width(480).Gap(12).Children(func() {
-			ui.Text(c, "Add Skills to "+placeName(d.scope)).FontSize(15).Bold()
-			ui.SearchField(c, &d.query).Placeholder("Search Skills").AutoFocus()
-			ui.Scroll(c).Height(300).Radius(8).Border(1, t.Border).Children(func() {
-				ui.Column(c).Padding(6).Gap(2).Children(func() {
+		ui.Column(c).Width(500).Gap(14).Children(func() {
+			ui.Text(c, "Add Skills to "+placeName(d.scope)).FontSize(15).FontWeight(700)
+			field, _ := searchField(c, &d.query, "Search", nil)
+			field.AutoFocus()
+			ui.Scroll(c).Height(300).Radius(10).Background(pal.card).Border(1, pal.separator).Children(func() {
+				ui.Column(c).Padding(4, 0).Children(func() {
 					if len(rows) == 0 {
-						muted(c, "No skills to add.").Padding(16).TextAlign(ui.Center)
+						ui.Text(c, "No skills to add").FontSize(textSmall).TextColor(pal.text2).Padding(24).TextAlign(ui.Center)
 					}
 					for _, sk := range rows {
 						on := d.picks[sk.Path]
-						ui.Column(c.Key(sk.Path)).Padding(6, 8).Gap(2).Children(func() {
+						ui.Column(c.Key(sk.Path)).Padding(7, 14).Gap(2).Children(func() {
 							if ui.Checkbox(c, &on, a.data.skillName(sk)).Changed() {
 								d.picks[sk.Path] = on
 							}
 							if sk.Description != "" {
-								muted(c, sk.Description).FontSize(12).Margin(0, 0, 0, 26).MaxLines(2)
+								ui.Text(c, sk.Description).FontSize(textSmall).TextColor(pal.text2).Margin(0, 0, 0, 26).MaxLines(2)
 							}
 						})
 					}
 				})
 			})
-			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-				ui.Segmented(c, &d.mode, "Link", "Copy").Label("Mode")
-				muted(c, modeHint(d.mode)).FontSize(12).Grow(1)
+			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
+				segmented(c, &d.mode, "Mode", "Link", "Copy").Width(130).Shrink(0)
+				ui.Text(c, modeHint(d.mode)).FontSize(textSmall).TextColor(pal.text2).Grow(1)
 			})
 			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
-				if ui.Button(c, "Cancel").Clicked() {
+				if button(c, "Cancel", plain).Clicked() {
 					d.open = false
 				}
 				label := "Enable"
 				if picked > 0 {
 					label = fmt.Sprintf("Enable %d", picked)
 				}
-				if ui.PrimaryButton(c, label).Disabled(picked == 0).Clicked() {
+				if button(c, label, primary).Disabled(picked == 0).Clicked() {
 					d.open = false
 					a.enableMany(d.scope, d.picks, []core.Mode{core.Link, core.Copy}[d.mode])
 				}
 			})
 		})
 	})
+}
+
+// refreshable reports whether a place has outdated copies Refresh Copies
+// replaces without asking.
+func refreshable(p *place) bool {
+	return slices.ContainsFunc(p.status.Enablements, func(e core.Enablement) bool {
+		return slices.ContainsFunc(e.Placements, func(pl core.Placement) bool { return pl.Outdated && !pl.Modified })
+	})
+}
+
+func (a *app) openAddSkills(sc core.Scope) {
+	a.projects.add = addSkills{open: true, scope: sc, picks: map[string]bool{}}
 }
 
 func modeHint(mode int) string {

@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -38,18 +39,24 @@ func main() {
 		}
 		post := func(fn func()) { win.Update(fn) }
 		a = newApp(svc, desk, post)
-		win = mygo.NewWindow(mygo.WindowOptions{
-			Title:          "MySkills",
-			Width:          1120,
-			Height:         720,
-			MinWidth:       840,
-			MinHeight:      520,
-			TitleBarStyle:  mygo.TitleBarHiddenInset,
-			TitleBarHeight: titleBarHeight,
-			Vibrancy:       mygo.VibrancySidebar,
-			StateKey:       "main",
-			Content:        ui.View(a.view),
-		})
+		opts := mygo.WindowOptions{
+			Title:           "MySkills",
+			Width:           1120,
+			Height:          720,
+			MinWidth:        840,
+			MinHeight:       520,
+			TitleBarStyle:   mygo.TitleBarHiddenInset,
+			TitleBarHeight:  barHeight,
+			Vibrancy:        mygo.VibrancySidebar,
+			BackgroundColor: "light-dark(#ffffff, #1e1e20)",
+			StateKey:        "main",
+			Content:         ui.View(a.view),
+		}
+		if runtime.GOOS == "darwin" {
+			// Centered in the bars at the top of the panes.
+			opts.TrafficLightPosition = &mygo.Point{X: 19, Y: 19}
+		}
+		win = mygo.NewWindow(opts)
 		a.reload() // after win is set: the read posts to it
 		mygo.App.OnDidBecomeActive(func() { win.Update(func() { a.reload() }) })
 	})

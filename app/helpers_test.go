@@ -122,12 +122,15 @@ func (h *harness) click(s string) {
 	h.settle()
 }
 
-// choose opens the popover menu of the element showing s, which the window
-// draws, and clicks an item.
+// choose clicks the element showing s, which opens a menu, and chooses an
+// item of it.
 func (h *harness) choose(s, item string) {
 	h.t.Helper()
 	h.click(s)
-	h.click(item)
+	if err := h.tt.ChooseMenuItem(item); err != nil {
+		h.t.Fatalf("choose %q: %v\nmenu: %q", item, err, h.tt.Menu())
+	}
+	h.settle()
 }
 
 // typeText types into the focused field, then settles.

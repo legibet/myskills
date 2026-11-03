@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -12,29 +13,29 @@ import (
 // placementRow shows how a skill is enabled in a place, and changes it: the
 // mode, the agents, the copies' state, and disabling. lead builds what the
 // row is about: the place on Skills, the skill on Projects.
-func (a *app) placementRow(c *ui.Context, p *place, sk core.Skill, e *core.Enablement, lead func()) {
+func (a *app) placementRow(c *ui.Context, g *rowGroup, p *place, sk core.Skill, e *core.Enablement, lead func()) {
 	t := c.Theme()
 	busy := a.working(c, sk.Path)
 	// The controls move under the lead when the pane is narrow.
-	ui.Row(c.Key(p.scope.Root+"\x00"+sk.Path)).Wrap().Justify(ui.End).GapX(10).GapY(6).AlignItems(ui.Center).Padding(8, 12).Children(func() {
-		ui.Row(c).Grow(1).MinWidth(180).Gap(10).AlignItems(ui.Center).Children(lead)
-		ui.Row(c).MinWidth(0).Shrink(1).Gap(8).AlignItems(ui.Center).Children(func() {
-			a.modeChip(c, p, sk, e, busy)
-			a.agentsChip(c, p, sk, e, busy)
+	g.row(c.Key(p.scope.Root + "\x00" + sk.Path)).Wrap().Justify(ui.End).GapX(10).GapY(8).Children(func() {
+		ui.Row(c).Grow(1).Basis(200).MinWidth(0).Gap(10).AlignItems(ui.Center).Children(lead)
+		ui.Row(c).MinWidth(0).Shrink(1).Wrap().Justify(ui.End).Gap(6).AlignItems(ui.Center).Children(func() {
 			if outdated(e) {
 				tag(c, "Outdated", t.Warning).Tooltip("The library changed since these files were copied")
-				ui.Button(c, "Refresh").Padding(3, 10).Disabled(busy).OnClick(func() {
+				button(c, "Refresh", plain).Height(24).Padding(0, 10).FontSize(textSmall).Disabled(busy).OnClick(func() {
 					a.start(a.refresh(p.scope, []string{sk.Path}, sk.Path, "Couldn't refresh the copies of "+sk.Name), false)
 				})
 			}
 			if modified(e) {
 				tag(c, "Modified", t.Warning).Tooltip("The copied files were edited in place")
 			}
+			a.modeChip(c, p, sk, e, busy)
+			a.agentsChip(c, p, sk, e, busy)
 			if busy {
-				ui.Spinner(c).Label("Working").Margin(0, 6)
+				ui.Box(c).Size(28, 28).Shrink(0).Center().Children(func() { spinner(c, "Working") })
 				return
 			}
-			iconButton(c, iconDisable, "Disable").OnClick(func() { a.disable(p.scope, sk, e, nil) })
+			toolButton(c, iconDisable, "Disable in "+placeName(p.scope)).OnClick(func() { a.disable(p.scope, sk, e, nil) })
 		})
 	})
 }
@@ -42,28 +43,24 @@ func (a *app) placementRow(c *ui.Context, p *place, sk core.Skill, e *core.Enabl
 // placeLead is a placement row's lead on Skills: the place.
 func placeLead(c *ui.Context, sc core.Scope) func() {
 	return func() {
-		icon := iconProject
 		if sc.IsGlobal() {
-			icon = iconGlobal
+			rowIcon(c, iconGlobal)
+			rowText(c, "Global", "Every project")
+			return
 		}
-		ui.Icon(c, icon).TextColor(c.Theme().TextMuted)
-		ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
-			ui.Text(c, placeName(sc)).Bold().SingleLine()
-			if !sc.IsGlobal() {
-				muted(c, tilde(sc.Root)).FontSize(12).SingleLine()
-			}
-		})
+		rowIcon(c, iconProject)
+		rowText(c, placeName(sc), tilde(sc.Root))
 	}
 }
 
 // modeChip shows the mode of an enablement, and switches it.
 func (a *app) modeChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablement, busy bool) {
 	label := map[core.Mode]string{core.Link: "Link", core.Copy: "Copy", core.Mixed: "Mixed"}[e.Mode]
-	chip(c, label).Label("Mode").Value(label).Disabled(busy).PopoverMenuButton(func(m *ui.Menu) {
-		if m.Item("Link").Radio(e.Mode == core.Link).Chosen() && e.Mode != core.Link {
+	popUp(c, "Mode", label).Shrink(0).Disabled(busy).Menu(func(m *ui.Menu) {
+		if m.Item("Link").Checked(e.Mode == core.Link).Chosen() && e.Mode != core.Link {
 			a.convert(p.scope, sk, e, core.Link)
 		}
-		if m.Item("Copy").Radio(e.Mode == core.Copy).Chosen() && e.Mode != core.Copy {
+		if m.Item("Copy").Checked(e.Mode == core.Copy).Chosen() && e.Mode != core.Copy {
 			a.convert(p.scope, sk, e, core.Copy)
 		}
 	})
@@ -74,17 +71,19 @@ func (a *app) modeChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablemen
 // placement, so they are one item.
 func (a *app) agentsChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablement, busy bool) {
 	key := p.scope.Root + "\x00" + sk.Path
-	names := a.data.agentNames(placedAgents(e))
-	b := chip(c, names).Label("Agents").Value(names).Role(ui.RolePopUpButton).Expanded(a.agentsOpen && a.agentsFor == key).Disabled(busy).MaxWidth(220).MinWidth(60).Shrink(1)
+	open := a.agentsOpen && a.agentsFor == key
+	b := popUp(c, "Agents", a.agentsSummary(placedAgents(e))).Tooltip(a.data.agentNames(placedAgents(e))).
+		MaxWidth(200).Shrink(0).Expanded(open).Disabled(busy)
 	if b.Clicked() {
-		a.agentsOpen = !a.agentsOpen || a.agentsFor != key
-		a.agentsFor = key
+		a.agentsOpen, a.agentsFor = !open, key
 	}
 	if a.agentsFor != key {
 		return
 	}
+	pal := colors(c)
 	ui.Popover(c, b, &a.agentsOpen, func() {
-		ui.Column(c).Gap(10).Padding(4).MinWidth(220).Children(func() {
+		ui.Column(c).Gap(10).Padding(4, 2).MinWidth(240).MaxWidth(420).Children(func() {
+			ui.Text(c, "Agents").FontSize(textSmall).FontWeight(600).TextColor(pal.text2)
 			for _, d := range p.dirs {
 				placed := slices.ContainsFunc(e.Placements, func(pl core.Placement) bool {
 					return slices.ContainsFunc(pl.Agents, func(id string) bool { return slices.Contains(d.Agents, id) })
@@ -100,19 +99,22 @@ func (a *app) agentsChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablem
 							a.disable(p.scope, sk, e, d.Agents)
 						}
 					}
-					muted(c, tilde(d.Path)).FontSize(12).Margin(0, 0, 0, 26).SingleLine()
+					ui.Text(c, tilde(d.Path)).FontSize(textCaption).TextColor(pal.text2).Margin(0, 0, 0, 26).SingleLine()
 				})
 			}
 		})
 	})
 }
 
-// chip is a compact button opening a menu or a popover, showing its value.
-func chip(c *ui.Context, label string) ui.Element {
-	return ui.Button(c, "").Padding(3, 8).Gap(4).Children(func() {
-		ui.Text(c, label).SingleLine()
-		ui.Icon(c, iconChevron).FontSize(11).TextColor(c.Theme().TextMuted)
-	})
+// agentsSummary names agents briefly: the first, and how many more.
+func (a *app) agentsSummary(ids []string) string {
+	switch len(ids) {
+	case 0:
+		return "No agents"
+	case 1, 2:
+		return a.data.agentNames(ids)
+	}
+	return fmt.Sprintf("%s +%d", a.data.agentName(ids[0]), len(ids)-1)
 }
 
 // placedAgents returns the agents that have a placement of the enablement,

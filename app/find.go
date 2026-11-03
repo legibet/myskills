@@ -172,12 +172,6 @@ func (a *app) findView(c *ui.Context) {
 	if p.docs == nil {
 		p.docs, p.added = map[string]preview{}, map[string]string{}
 	}
-	header(c, "Find", func() {
-		ui.Button(c, "").Gap(6).Children(func() {
-			ui.Icon(c, iconFolder)
-			ui.Text(c, "Choose Folder…").SingleLine()
-		}).OnClick(a.chooseSource)
-	})
 	if !p.due.IsZero() {
 		if wait := p.due.Sub(c.Now()); wait > 0 {
 			c.After(wait)
@@ -197,32 +191,32 @@ func (a *app) findView(c *ui.Context) {
 	}
 	ui.Split(c, &p.split, func() {
 		ui.Column(c).Fill().Children(func() {
-			ui.Column(c).Padding(10, 12).Gap(8).Children(func() {
-				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					field := ui.SearchField(c, &p.query).Placeholder("Search skills.sh or enter a source").
-						Label("Search skills.sh, or enter owner/repo, a git URL or a folder").Bind(&a.searchField).AutoFocus().Grow(1)
-					if field.Changed() {
-						a.queryChanged(c.Now())
-					}
-					if field.Submitted() {
-						a.submitQuery()
-					}
-					if a.busy[findSearch] {
-						ui.Spinner(c).Label("Searching")
-					}
-				})
+			bar(c).Padding(0, 10, 0, 16).Children(func() {
+				paneTitle(c, "Find", a.findDetailLine(rows))
+				if a.busy[findSearch] {
+					spinner(c, "Searching").Margin(0, 7)
+				}
+				toolButton(c, iconFolder, "Choose Folder…").OnClick(a.chooseSource)
+			})
+			ui.Column(c).Padding(0, 12, 10, 12).Gap(8).Children(func() {
+				field, changed := searchField(c, &p.query, "Search skills.sh or enter a source", &a.searchField)
+				field.Label("Search skills.sh, or enter owner/repo, a git URL or a folder").AutoFocus()
+				if changed {
+					a.queryChanged(c.Now())
+				}
+				if field.Submitted() {
+					a.submitQuery()
+				}
 				a.sourceBar(c)
 			})
-			ui.Divider(c)
 			s := &p.list
 			s.Selected = &p.sel
 			s.Key = func(i int) any { return rows[i].key() }
 			s.Label = func(i int) string { return rows[i].name() }
-			list := ui.List(c, s, len(rows)).Grow(1).Padding(6).Gap(2).Label("Skills found")
+			list := sourceList(c, s, len(rows), "Skills found", func(i int, onAccent bool) { a.findRowView(c, rows[i], onAccent) })
 			if !p.browsing && a.stale() {
 				list.Opacity(0.5)
 			}
-			list.Rows(func(r ui.ListRow) { a.findRowView(r.Context, rows[r.Index], r.Selected()) })
 			if list.Changed() && p.sel >= 0 && p.sel < len(rows) {
 				p.key = rows[p.sel].key()
 			}
@@ -235,6 +229,18 @@ func (a *app) findView(c *ui.Context) {
 			a.findEmpty(c)
 		}
 	}).Grow(1)
+}
+
+// findDetailLine is the line under the Find title: where the rows are from.
+func (a *app) findDetailLine(rows []findRow) string {
+	p := &a.find
+	switch {
+	case p.browsing:
+		return sourceName(p.spec)
+	case len(rows) > 0:
+		return fmt.Sprintf("%d %s on skills.sh", len(rows), plural(len(rows), "result", "results"))
+	}
+	return "skills.sh, git or a folder"
 }
 
 // queryChanged leaves what the last query showed, and schedules the search
@@ -553,7 +559,7 @@ func (a *app) sourceBar(c *ui.Context) {
 		}
 		spec, _ = source.Parse(q)
 	}
-	t := c.Theme()
+	pal := colors(c)
 	local := spec.Kind == source.Local
 	icon, sub := iconGlobal, spec.URL
 	if local {
@@ -569,70 +575,64 @@ func (a *app) sourceBar(c *ui.Context) {
 	case p.fetchErr != nil:
 		sub = "Couldn't fetch"
 	}
-	ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(8, 10).Radius(8).Background(t.Surface).Children(func() {
-		ui.Icon(c, icon).TextColor(t.TextMuted)
-		ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
-			ui.Text(c, sourceName(spec)).FontSize(12).FontWeight(600).SingleLine()
-			muted(c, sub).FontSize(12).SingleLine()
+	ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(8, 8, 8, 12).Radius(8).Background(pal.card).Border(1, pal.separator).Children(func() {
+		ui.Icon(c, icon).Size(15, 15).Shrink(0).TextColor(pal.text2)
+		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
+			ui.Text(c, sourceName(spec)).FontSize(textSmall).FontWeight(600).SingleLine()
+			ui.Text(c, sub).FontSize(textCaption).TextColor(pal.text2).SingleLine()
 		})
 		key := "link:" + spec.Path
 		switch {
 		case a.busy[findFetch], a.working(c, key):
-			ui.Spinner(c).Label("Working")
+			spinner(c, "Working")
 		case !p.browsing:
-			ui.PrimaryButton(c, "Fetch").Padding(3, 10).OnClick(func() { a.fetch(spec) })
+			button(c, "Fetch", primary).Height(24).Padding(0, 10).FontSize(textSmall).OnClick(func() { a.fetch(spec) })
 		case p.fetched == nil || !local:
 		case slices.ContainsFunc(a.data.lib, func(sk core.Skill) bool { return sk.Linked && sk.LinkTarget == spec.Path }):
-			tag(c, "Linked", t.Success)
+			tag(c, "Linked", pal.green)
 		default:
-			ui.Button(c, "").Padding(3, 8).Gap(4).Tooltip("Add the folder to the library as a link: its skills stay where they are").Children(func() {
-				ui.Icon(c, iconLink).FontSize(12)
-				ui.Text(c, "Link Folder").SingleLine()
-			}).OnClick(func() { a.linkFolder(spec.Path) })
+			iconTextButton(c, iconLink, "Link Folder", plain).Height(24).Padding(0, 10).FontSize(textSmall).
+				Tooltip("Add the folder to the library as a link: its skills stay where they are").OnClick(func() { a.linkFolder(spec.Path) })
 		}
 	})
 }
 
 // findRowView is a row of the list: the name, where it comes from (what it
 // does, for a candidate, whose source the bar names), and Add or its state.
-func (a *app) findRowView(c *ui.Context, r findRow, chosen bool) {
-	t := c.Theme()
-	sub := t.TextMuted
-	if chosen {
-		sub = t.AccentText.Alpha(0.8)
-	}
+func (a *app) findRowView(c *ui.Context, r findRow, onAccent bool) {
 	from := ""
 	if r.res != nil {
 		from = r.res.Source + " · " + installs(r.res.Installs)
 	} else {
 		from = cmp.Or(r.cand.Description, r.cand.RelPath, sourceName(a.find.spec))
 	}
-	ui.Row(c).Padding(7, 10).Gap(10).AlignItems(ui.Center).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Gap(3).Children(func() {
-			ui.Text(c, r.name()).FontWeight(600).SingleLine()
-			ui.Text(c, from).FontSize(12).TextColor(sub).SingleLine()
+	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+			listRow(c, onAccent, func() {
+				ui.Text(c, r.name()).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+			}, from)
 		})
-		if a.working(c, r.key()) {
-			ui.Spinner(c).Label("Adding")
-			return
-		}
-		state, _ := a.rowState(r)
-		switch {
-		case state == "":
-			ui.Button(c, "Add").Label("Add "+r.name()).Padding(3, 10).Disabled(r.res != nil && a.stale()).OnClick(func() { a.add(r) })
-		case chosen:
-			ui.Badge(c, state).Background(t.AccentText.Alpha(0.2)).TextColor(t.AccentText)
-		default:
-			tag(c, state, stateColor(t, state))
-		}
+		ui.Row(c).Shrink(0).Padding(0, 10, 0, 0).Children(func() {
+			if a.working(c, r.key()) {
+				spinner(c, "Adding")
+				return
+			}
+			switch state, _ := a.rowState(r); state {
+			case "":
+				button(c, "Add", plain).Height(22).Padding(0, 10).FontSize(textSmall).Label("Add " + r.name()).
+					Disabled(r.res != nil && a.stale()).OnClick(func() { a.add(r) })
+			default:
+				rowTag(c, state, stateColor(c, state), onAccent)
+			}
+		})
 	})
 }
 
-func stateColor(t *ui.Theme, state string) ui.Color {
+func stateColor(c *ui.Context, state string) ui.Color {
 	if state == stateAdded || state == stateInLibrary {
-		return t.Success
+		return colors(c).green
 	}
-	return t.Danger
+	return colors(c).red
 }
 
 // installs writes a skills.sh install count as the TUI does: "12.3K
@@ -653,8 +653,8 @@ func installs(n int) string {
 // findDetail is the row chosen: what it is, where it comes from, Add or its
 // state, and its SKILL.md.
 func (a *app) findDetail(c *ui.Context, r findRow) {
-	t := c.Theme()
 	p := &a.find
+	pal := colors(c)
 	key := r.key()
 	pv, loaded := p.docs[key]
 	desc := pv.meta.Description
@@ -662,28 +662,22 @@ func (a *app) findDetail(c *ui.Context, r findRow) {
 		desc = r.cand.Description
 	}
 	state, path := a.rowState(r)
-	ui.Scroll(c.Key(key)).Fill().Children(func() {
-		ui.Column(c).Padding(20, 24).Gap(18).MaxWidth(820).Children(func() {
-			ui.Column(c).Gap(6).Children(func() {
-				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, r.name()).FontSize(20).Bold().Grow(1).Selectable()
-					switch {
-					case a.working(c, key):
-						ui.Spinner(c).Label("Adding")
-					case state == "":
-						ui.PrimaryButton(c, "Add to Library").Disabled(r.res != nil && a.stale()).OnClick(func() { a.add(r) })
-					default:
-						tag(c, state, stateColor(t, state))
-						if _, ok := a.data.skill(path); ok && state != stateConflict {
-							ui.Button(c, "Show in Skills").OnClick(func() { a.show(path) })
-						}
-					}
-				})
-				if desc != "" {
-					ui.Text(c, desc).Selectable()
+	ui.Column(c).Fill().Children(func() {
+		detailBar(c, func() {
+			switch {
+			case a.working(c, key):
+				spinner(c, "Adding")
+			case state == "":
+				button(c, "Add to Library", primary).Disabled(r.res != nil && a.stale()).OnClick(func() { a.add(r) })
+			default:
+				tag(c, state, stateColor(c, state))
+				if _, ok := a.data.skill(path); ok && state != stateConflict {
+					button(c, "Show in Skills", plain).OnClick(func() { a.show(path) })
 				}
-				a.origin(c, r)
-			})
+			}
+		})
+		detailPane(c, key, func() {
+			detailHeader(c, r.name(), desc, func() { a.origin(c, r) })
 			switch state {
 			case stateConflict:
 				note(c, "The library already has "+path+" from another source under this name.")
@@ -693,22 +687,21 @@ func (a *app) findDetail(c *ui.Context, r findRow) {
 			switch {
 			case !loaded:
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Spinner(c).Label("Loading")
-					muted(c, "Loading SKILL.md…")
+					spinner(c, "Loading")
+					ui.Text(c, "Loading SKILL.md…").FontSize(textSmall).TextColor(pal.text2)
 				})
 			case pv.err != nil:
-				muted(c, "Couldn't load SKILL.md: "+pv.err.Error()).Selectable()
+				note(c, "Couldn't load SKILL.md: "+pv.err.Error())
 			default:
 				docView(c, pv.meta.License, pv.meta.Compatibility, pv.meta.AllowedTools, pv.meta.Metadata, pv.body, &p.md)
 			}
 		})
-	}).Background(t.Background)
+	})
 }
 
 // origin is where a row's skill comes from: its repository, a link to its
 // page when there is one, or its folder.
 func (a *app) origin(c *ui.Context, r findRow) {
-	t := c.Theme()
 	var label, url, extra string
 	if r.res != nil {
 		label, extra = r.res.Source, installs(r.res.Installs)
@@ -725,20 +718,15 @@ func (a *app) origin(c *ui.Context, r findRow) {
 			label = tilde(r.cand.Dir)
 		}
 	}
-	ui.Row(c).Gap(6).Wrap().AlignItems(ui.Center).Children(func() {
-		if url != "" {
-			ui.Button(c, "").Padding(0).Background(ui.Transparent).BorderWidth(0).Tooltip(url).Children(func() {
-				ui.Text(c, label).FontSize(12).TextColor(t.Accent)
-				ui.Icon(c, iconExternal).FontSize(11).TextColor(t.Accent)
-			}).OnClick(func() { c.Services().OpenURL(url) })
-		} else {
-			muted(c, label).FontSize(12).Selectable()
-		}
-		if extra != "" {
-			muted(c, "·").FontSize(12)
-			muted(c, extra).FontSize(12).Selectable()
-		}
-	})
+	if url != "" {
+		webLink(c, label, url)
+	} else {
+		metaText(c, label)
+	}
+	if extra != "" {
+		dot(c)
+		metaText(c, extra)
+	}
 }
 
 // findEmpty fills the preview pane while the list is empty: what to type,
@@ -746,29 +734,32 @@ func (a *app) origin(c *ui.Context, r findRow) {
 func (a *app) findEmpty(c *ui.Context) {
 	p := &a.find
 	q := strings.TrimSpace(p.query)
-	switch {
-	case p.fetchErr != nil:
-		emptyState(c, "Couldn't fetch "+sourceName(p.spec), p.fetchErr.Error(), func() {
-			ui.Button(c, "Retry").OnClick(func() { a.fetch(p.spec) })
-		})
-	case p.err != nil:
-		emptyState(c, "Search failed", p.err.Error(), func() {
-			ui.Button(c, "Retry").OnClick(a.search)
-		})
-	case a.busy[findFetch], a.busy[findSearch], !p.due.IsZero():
-		label := "Searching skills.sh…"
-		if a.busy[findFetch] {
-			label = "Fetching " + sourceName(p.spec) + "…"
+	ui.Column(c).Fill().Children(func() {
+		bar(c)
+		switch {
+		case p.fetchErr != nil:
+			emptyState(c, "Couldn't fetch "+sourceName(p.spec), p.fetchErr.Error(), func() {
+				button(c, "Retry", plain).OnClick(func() { a.fetch(p.spec) })
+			})
+		case p.err != nil:
+			emptyState(c, "Search failed", p.err.Error(), func() {
+				button(c, "Retry", plain).OnClick(a.search)
+			})
+		case a.busy[findFetch], a.busy[findSearch], !p.due.IsZero():
+			label := "Searching skills.sh…"
+			if a.busy[findFetch] {
+				label = "Fetching " + sourceName(p.spec) + "…"
+			}
+			ui.Column(c).Grow(1).Center().Gap(10).Children(func() {
+				spinner(c, "Working")
+				ui.Text(c, label).FontSize(textSmall).TextColor(colors(c).text2)
+			})
+		case source.IsExplicit(q):
+			emptyState(c, "Fetch to see its skills", "Nothing is added to your library until you choose.", nil)
+		case utf8.RuneCountInString(q) < 2:
+			emptyState(c, "Find skills", "Search skills.sh by name or topic, or enter owner/repo, a git URL or a folder path to see the skills it has.", nil)
+		default:
+			emptyState(c, "No skills found", "Nothing on skills.sh matches “"+q+"”.", nil)
 		}
-		ui.Column(c).Grow(1).Center().Gap(10).Children(func() {
-			ui.Spinner(c).Label("Working")
-			muted(c, label)
-		})
-	case source.IsExplicit(q):
-		emptyState(c, "Fetch to see its skills", "Nothing is added to your library until you choose.", nil)
-	case utf8.RuneCountInString(q) < 2:
-		emptyState(c, "Find skills", "Search skills.sh by name or topic, or enter owner/repo, a git URL or a folder path to see the skills it has.", nil)
-	default:
-		emptyState(c, "No skills found", "Nothing on skills.sh matches “"+q+"”.", nil)
-	}
+	})
 }

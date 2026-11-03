@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -23,23 +24,26 @@ type addAgent struct {
 }
 
 func (a *app) agentsView(c *ui.Context) {
-	header(c, "Agents", func() {
-		ui.Button(c, "").Gap(6).Disabled(!a.data.read).Children(func() {
-			ui.Icon(c, iconAdd)
-			ui.Text(c, "Add Agent…")
-		}).OnClick(func() { a.agents.add = addAgent{open: true} })
+	pal := colors(c)
+	bar(c).Padding(0, max(14, c.TitleBar().Right+10), 0, 24).Children(func() {
+		detail := ""
+		if a.data.read {
+			detail = fmt.Sprintf("%d agents · %d %s", len(a.data.agents), len(a.data.defaults), plural(len(a.data.defaults), "default", "defaults"))
+		}
+		paneTitle(c, "Agents", detail)
+		iconTextButton(c, iconAdd, "Add Agent…", plain).Disabled(!a.data.read).OnClick(func() { a.agents.add = addAgent{open: true} })
 	})
 	if !a.data.read {
-		ui.Column(c).Grow(1).Center().Children(func() { ui.Spinner(c).Label("Loading") })
+		loading(c)
 		return
 	}
-	t := c.Theme()
-	ui.Scroll(c).Fill().Children(func() {
-		ui.Column(c).Padding(20, 24).Gap(10).MaxWidth(820).Children(func() {
-			muted(c, "Skills are placed in the skill directories of these agents. New enablements use the defaults.").FontSize(12)
-			ui.Column(c).Radius(10).Border(1, t.Border).Dividers(1, t.Border).Children(func() {
+	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+		ui.Column(c).Padding(4, 24, 40, 24).Gap(10).MaxWidth(760).Children(func() {
+			ui.Text(c, "Skills are placed in the skill directories of these agents. New enablements use the defaults.").
+				FontSize(textSmall).TextColor(pal.text2).Padding(0, 2)
+			group(c, "", func(g *rowGroup) {
 				for _, ag := range a.data.agents {
-					a.agentRow(c, ag)
+					a.agentRow(c, g, ag)
 				}
 			})
 		})
@@ -49,39 +53,40 @@ func (a *app) agentsView(c *ui.Context) {
 
 // agentRow is an agent: its directories, whether it is a default, and
 // removing it when it is custom.
-func (a *app) agentRow(c *ui.Context, ag agent.Agent) {
+func (a *app) agentRow(c *ui.Context, g *rowGroup, ag agent.Agent) {
+	pal := colors(c)
 	_, builtin := agent.Find(agent.Builtins, ag.ID)
 	isDefault := slices.Contains(a.data.defaults, ag.ID)
-	ui.Row(c.Key(ag.ID)).Gap(12).AlignItems(ui.Center).Padding(10, 14).Children(func() {
-		ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, ag.Name).Bold().SingleLine()
+	g.row(c.Key(ag.ID)).Padding(12, 14).Gap(16).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Gap(6).Children(func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Baseline).Children(func() {
+				ui.Text(c, ag.Name).FontWeight(600).SingleLine()
 				if ag.Name != ag.ID {
-					muted(c, ag.ID).FontSize(12).SingleLine()
+					ui.Text(c, ag.ID).FontSize(textSmall).TextColor(pal.text2).SingleLine()
 				}
 			})
 			dir := func(label, path string) {
-				ui.Row(c).Gap(8).Children(func() {
-					muted(c, label).FontSize(12).Width(52).Shrink(0)
+				ui.Row(c).Gap(10).Children(func() {
+					ui.Text(c, label).FontSize(textSmall).TextColor(pal.text2).Width(48).Shrink(0)
 					if path == "" {
-						muted(c, "None").FontSize(12)
+						ui.Text(c, "None").FontSize(textSmall).TextColor(pal.text3)
 						return
 					}
-					ui.Text(c, path).FontSize(12).SingleLine().Selectable()
+					ui.Text(c, path).FontSize(textSmall).Font("monospace").SingleLine().Selectable()
 				})
 			}
 			dir("Project", ag.Project)
 			global := ""
-			if g, ok := ag.GlobalDir(); ok {
-				global = tilde(g)
+			if gd, ok := ag.GlobalDir(); ok {
+				global = tilde(gd)
 			}
 			dir("Global", global)
 		})
 		control := "default:" + ag.ID
 		on := a.toggled(control, "agents", isDefault)
 		last := isDefault && len(a.data.defaults) == 1
-		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-			muted(c, "Default").FontSize(12)
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
+			ui.Text(c, "Default").FontSize(textSmall).TextColor(pal.text2)
 			sw := ui.Switch(c, &on).Label("Default for " + ag.Name).Disabled(last || a.working(c, "agents"))
 			if last {
 				sw.Tooltip("New enablements need at least one agent")
@@ -91,9 +96,11 @@ func (a *app) agentRow(c *ui.Context, ag agent.Agent) {
 				a.setDefault(ag.ID, on)
 			}
 		})
-		if !builtin {
-			iconButton(c, iconDisable, "Remove "+ag.Name+"…").Disabled(a.working(c, "agents")).OnClick(func() { a.confirmRemoveAgent(ag) })
-		}
+		ui.Box(c).Size(28, 28).Shrink(0).Children(func() {
+			if !builtin {
+				toolButton(c, iconDisable, "Remove "+ag.Name+"…").Disabled(a.working(c, "agents")).OnClick(func() { a.confirmRemoveAgent(ag) })
+			}
+		})
 	})
 }
 
@@ -128,12 +135,12 @@ func (a *app) addAgentView(c *ui.Context) {
 	if !d.open {
 		return
 	}
-	t := c.Theme()
+	pal := colors(c)
 	ui.Modal(c, &d.open, func() {
-		ui.Column(c).Width(440).Gap(14).Children(func() {
+		ui.Column(c).Width(440).Gap(16).Children(func() {
 			ui.Column(c).Gap(4).Children(func() {
-				ui.Text(c, "Add Agent").FontSize(15).Bold()
-				muted(c, "An agent myskills doesn't know: where it reads skills in a project, globally, or both.").FontSize(12)
+				ui.Text(c, "Add Agent").FontSize(15).FontWeight(700)
+				ui.Text(c, "An agent myskills doesn't know: where it reads skills in a project, globally, or both.").FontSize(textSmall).TextColor(pal.text2).LineHeight(1.4)
 			})
 			ui.Form(c, func() {
 				ui.Field(c, "ID", func() { ui.TextInput(c, &d.id).Placeholder("grok").AutoFocus() }).
@@ -144,16 +151,16 @@ func (a *app) addAgentView(c *ui.Context) {
 				ui.Field(c, "Global directory", func() { ui.TextInput(c, &d.global).Placeholder("~/.grok/skills") })
 			}).OnSubmit(a.addAgent)
 			if d.err != "" {
-				ui.Text(c, d.err).FontSize(12).TextColor(t.Danger).Selectable()
+				ui.Text(c, d.err).FontSize(textSmall).TextColor(pal.red).Selectable()
 			}
 			ui.Row(c).Gap(8).Justify(ui.End).AlignItems(ui.Center).Children(func() {
 				if d.saving {
-					ui.Spinner(c).Label("Adding")
+					spinner(c, "Adding")
 				}
-				if ui.Button(c, "Cancel").Clicked() {
+				if button(c, "Cancel", plain).Clicked() {
 					d.open = false
 				}
-				ui.PrimaryButton(c, "Add").Disabled(d.saving || strings.TrimSpace(d.id) == "").OnClick(a.addAgent)
+				button(c, "Add", primary).Disabled(d.saving || strings.TrimSpace(d.id) == "").OnClick(a.addAgent)
 			})
 		})
 	})

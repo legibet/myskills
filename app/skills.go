@@ -57,29 +57,32 @@ func (a *app) skillRows() []core.Skill {
 }
 
 func (a *app) skillsView(c *ui.Context) {
-	header(c, "Skills", func() { a.updateActions(c) })
-	switch {
-	case !a.data.read:
-		ui.Column(c).Grow(1).Center().Children(func() { ui.Spinner(c).Label("Loading") })
+	if !a.data.read {
+		loading(c)
 		return
-	case len(a.data.lib) == 0:
-		emptyState(c, "Your library is empty", "Add skills from skills.sh, a git repository or a folder; then enable them where you need them.", func() {
-			ui.PrimaryButton(c, "Find Skills").OnClick(func() { a.page = pageFind })
+	}
+	if len(a.data.lib) == 0 {
+		bar(c).Padding(0, 16).Children(func() { paneTitle(c, "Skills", "") })
+		emptyState(c, "Your library is empty", "Add skills from skills.sh, a git repository or a folder, then enable them where you need them.", func() {
+			button(c, "Find Skills", primary).OnClick(func() { a.page = pageFind })
 		})
 		return
 	}
 	rows := a.skillRows()
-	a.skills.sel = max(0, slices.IndexFunc(rows, func(sk core.Skill) bool { return sk.Path == a.skills.path }))
-	if len(rows) > 0 {
-		a.skills.path = rows[a.skills.sel].Path
+	a.skills.sel = slices.IndexFunc(rows, func(sk core.Skill) bool { return sk.Path == a.skills.path })
+	if a.skills.sel < 0 && len(rows) > 0 {
+		a.skills.sel, a.skills.path = 0, rows[0].Path
 	}
 	ui.Split(c, &a.skills.split, func() {
 		ui.Column(c).Fill().Children(func() {
-			ui.Column(c).Padding(10, 12).Gap(8).Children(func() {
-				ui.SearchField(c, &a.skills.query).Placeholder("Search Skills").Bind(&a.searchField)
-				ui.Segmented(c, &a.skills.filter, "All", "Enabled", "Unused").Label("Show")
+			bar(c).Padding(0, 10, 0, 16).Children(func() {
+				paneTitle(c, "Skills", a.libraryDetail())
+				a.updateActions(c)
 			})
-			ui.Divider(c)
+			ui.Column(c).Padding(0, 12, 10, 12).Gap(8).Children(func() {
+				searchField(c, &a.skills.query, "Search", &a.searchField)
+				segmented(c, &a.skills.filter, "Show", "All", "Enabled", "Unused")
+			})
 			s := &a.skills.list
 			s.Selected = &a.skills.sel
 			s.Key = func(i int) any { return rows[i].Path }
@@ -88,11 +91,10 @@ func (a *app) skillsView(c *ui.Context) {
 				s.ScrollTo(a.skills.sel, ui.Center)
 				a.skills.reveal = false
 			}
-			list := ui.List(c, s, len(rows)).Grow(1).Padding(6).Gap(2).Label("Skills")
-			list.Rows(func(r ui.ListRow) { a.skillRow(r.Context, rows[r.Index], r.Selected()) })
+			list := sourceList(c, s, len(rows), "Skills", func(i int, onAccent bool) { a.skillRow(c, rows[i], onAccent) })
 			list.Children(func() {
 				if len(rows) == 0 {
-					muted(c, "No skills match.").Padding(16).TextAlign(ui.Center)
+					ui.Text(c, "No skills match").FontSize(textSmall).TextColor(colors(c).text2).Padding(20).TextAlign(ui.Center)
 				}
 			})
 			if list.Changed() && a.skills.sel >= 0 && a.skills.sel < len(rows) {
@@ -106,28 +108,210 @@ func (a *app) skillsView(c *ui.Context) {
 	}).Grow(1)
 }
 
-// skillRow is a skill in the list: its name and badges, its source and where
-// it is enabled.
-func (a *app) skillRow(c *ui.Context, sk core.Skill, chosen bool) {
-	t := c.Theme()
-	sub := t.TextMuted
-	if chosen {
-		sub = t.AccentText.Alpha(0.8)
+// libraryDetail is the line under the Skills title: how many skills, or
+// how the check for updates goes.
+func (a *app) libraryDetail() string {
+	u := &a.updates
+	switch n := a.updates.available(); {
+	case u.checking:
+		return fmt.Sprintf("Checking %d of %d…", u.done, u.total)
+	case n > 0:
+		return fmt.Sprintf("%d %s available", n, plural(n, "update", "updates"))
 	}
-	ui.Column(c).Padding(7, 10).Gap(3).Children(func() {
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Text(c, a.data.skillName(sk)).FontWeight(600).SingleLine().Grow(1)
-			for _, b := range a.badges(sk) {
-				if chosen {
-					ui.Badge(c, b.text).Background(t.AccentText.Alpha(0.2)).TextColor(t.AccentText)
+	n := len(a.data.lib)
+	return fmt.Sprintf("%d %s", n, plural(n, "skill", "skills"))
+}
+
+// skillRow is a skill in the list: its name and states, its source and
+// where it is enabled.
+func (a *app) skillRow(c *ui.Context, sk core.Skill, onAccent bool) {
+	t := c.Theme()
+	listRow(c, onAccent, func() {
+		ui.Text(c, a.data.skillName(sk)).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+		for _, b := range a.badges(sk) {
+			rowTag(c, b.text, b.color(t), onAccent)
+		}
+	}, tilde(sk.SourceLabel())+" · "+a.where(sk.Path))
+}
+
+// skillDetail is the skill chosen: what it is, where it is enabled, and its
+// SKILL.md.
+func (a *app) skillDetail(c *ui.Context, sk core.Skill) {
+	ui.Column(c).Fill().Children(func() {
+		detailBar(c, func() { a.skillActions(c, sk) })
+		detailPane(c, sk.Path, func() {
+			detailHeader(c, sk.Name, sk.Description, func() {
+				label := tilde(sk.SourceLabel())
+				if url := webURL(sk); url != "" {
+					webLink(c, label, url)
 				} else {
-					tag(c, b.text, b.color(t))
+					metaText(c, label)
 				}
+				if sk.Path != sk.Name {
+					dot(c)
+					metaText(c, sk.Path)
+				}
+			})
+			for _, n := range a.notes(sk) {
+				note(c, n)
+			}
+			if sk.Valid() {
+				a.enabledIn(c, sk)
+			}
+			if d, ok := a.data.docs[sk.Path]; ok {
+				docView(c, d.meta.License, d.meta.Compatibility, d.meta.AllowedTools, d.meta.Metadata, d.body, &a.skills.md)
 			}
 		})
-		ui.Text(c, sk.SourceLabel()+" · "+a.where(sk.Path)).FontSize(12).TextColor(sub).SingleLine()
 	})
 }
+
+// webURL is the repository page of a git skill, or "".
+func webURL(sk core.Skill) string {
+	if sk.Linked || sk.Record == nil || sk.Record.Source.Type != "git" {
+		return ""
+	}
+	src := sk.Record.Source
+	return source.WebURL(src.URL, src.Ref, src.Path)
+}
+
+// skillActions are the detail bar's: Update when the last check found one,
+// and the other actions in a menu.
+func (a *app) skillActions(c *ui.Context, sk core.Skill) {
+	busy := a.working(c, sk.Path)
+	if busy {
+		spinner(c, "Working")
+	}
+	if a.updates.checks[sk.Path].State == core.Available {
+		button(c, "Update", primary).Label("Update " + sk.Name).Disabled(busy).OnClick(func() { a.update(sk) })
+	}
+	toolButton(c, iconMore, "More").Disabled(busy).Menu(func(m *ui.Menu) {
+		if m.Item("Update").Disabled(!sk.Updatable() && !hasCopies(a.data.usedIn(sk.Path), sk.Path)).Chosen() {
+			a.update(sk)
+		}
+		m.Separator()
+		if m.Item(revealLabel).Chosen() {
+			a.desk.reveal(sk.Dir)
+		}
+		if m.Item("Open SKILL.md").Disabled(!sk.Valid()).Chosen() {
+			a.desk.open(sk.Dir + "/SKILL.md")
+		}
+		m.Separator()
+		if m.Item("Remove from Library…").Chosen() {
+			a.confirmRemove(sk)
+		}
+	})
+}
+
+// notes say what is wrong with a skill, or what its last check found.
+func (a *app) notes(sk core.Skill) []string {
+	var out []string
+	if !sk.Valid() {
+		out = append(out, "This skill can't be enabled: "+sk.Issue)
+	}
+	if sk.Modified {
+		out = append(out, "Edited in the library since it was added; updating replaces the edits.")
+	}
+	switch c := a.updates.checks[sk.Path]; c.State {
+	case core.RemovedUpstream:
+		out = append(out, "Removed upstream; the library keeps its copy.")
+	case core.CheckFailed:
+		out = append(out, "Couldn't check for an update: "+c.Err.Error())
+	}
+	return out
+}
+
+// enabledIn lists the places with the skill, Global always, and enables it
+// in a project.
+func (a *app) enabledIn(c *ui.Context, sk core.Skill) {
+	group(c, "Enabled in", func(g *rowGroup) {
+		for i := range a.data.places {
+			p := &a.data.places[i]
+			e, ok := p.enablement(sk.Path)
+			switch {
+			case ok:
+				a.placementRow(c, g, p, sk, e, placeLead(c, p.scope))
+			case p.scope.IsGlobal():
+				a.offRow(c, g, p, sk)
+			}
+		}
+		a.enableInProject(c, g, sk)
+	})
+}
+
+// offRow is Global without the skill.
+func (a *app) offRow(c *ui.Context, g *rowGroup, p *place, sk core.Skill) {
+	g.row(c.Key("off")).Children(func() {
+		rowIcon(c, iconGlobal)
+		rowText(c, "Global", "Not enabled")
+		button(c, "Enable", plain).Disabled(a.working(c, sk.Path)).OnClick(func() {
+			a.enable(p.scope, sk, core.EnableOptions{Mode: core.Link})
+		})
+	})
+}
+
+// enableInProject enables the skill in a known project that doesn't have it,
+// or in a folder chosen.
+func (a *app) enableInProject(c *ui.Context, g *rowGroup, sk core.Skill) {
+	g.row(c.Key("add")).MinHeight(40).Children(func() {
+		linkButton(c, iconAdd, "Enable in Project…").Disabled(a.working(c, sk.Path)).Menu(func(m *ui.Menu) {
+			for i := range a.data.places {
+				p := &a.data.places[i]
+				if _, ok := p.enablement(sk.Path); ok || p.scope.IsGlobal() {
+					continue
+				}
+				if m.Item(tilde(p.scope.Root)).Chosen() {
+					a.enable(p.scope, sk, core.EnableOptions{Mode: core.Link})
+				}
+			}
+			m.Separator()
+			if m.Item("Choose Folder…").Chosen() {
+				a.chooseProject(func(sc core.Scope) { a.enable(sc, sk, core.EnableOptions{}) })
+			}
+		})
+	})
+}
+
+// docView shows a SKILL.md: the optional frontmatter fields that are set,
+// then the body, as a document.
+func docView(c *ui.Context, license, compatibility, tools string, meta map[string]string, body string, md *markdown.Options) {
+	p := colors(c)
+	fields := [][2]string{{"License", license}, {"Compatibility", compatibility}, {"Allowed tools", tools}}
+	for _, k := range slices.Sorted(maps.Keys(meta)) {
+		fields = append(fields, [2]string{k, meta[k]})
+	}
+	fields = slices.DeleteFunc(fields, func(f [2]string) bool { return f[1] == "" })
+	ui.Column(c).Gap(8).Label("SKILL.md").Children(func() {
+		ui.Text(c, "SKILL.md").FontSize(textSmall).FontWeight(600).TextColor(p.text2).Padding(0, 2)
+		ui.Column(c).Radius(10).Border(1, p.separator).Clip().Children(func() {
+			if len(fields) > 0 {
+				ui.Column(c).Padding(12, 20).Gap(6).Background(p.card).Children(func() {
+					for _, f := range fields {
+						ui.Row(c).Gap(12).Children(func() {
+							ui.Text(c, f[0]).FontSize(textSmall).TextColor(p.text2).Width(104).Shrink(0)
+							ui.Text(c, f[1]).FontSize(textSmall).Grow(1).Selectable()
+						})
+					}
+				})
+				ui.Box(c).Height(1).Background(p.separator)
+			}
+			ui.Column(c).Padding(18, 22, 22, 22).Children(func() {
+				md.Theme = docTheme
+				markdown.View(c, body, md)
+			})
+		})
+	})
+}
+
+// docTheme is the markdown look of a SKILL.md: headings a step smaller than
+// a page's, as the document sits under the skill's own title.
+var docTheme = func() *markdown.Theme {
+	th := &markdown.Theme{}
+	sizes := [6]float32{1.3, 1.15, 1.05, 1, 0.95, 0.9}
+	for i := range th.Headings {
+		th.Headings[i] = markdown.HeadingStyle{Size: sizes[i], Weight: 650, Top: 1.3, Bottom: 0.5}
+	}
+	return th
+}()
 
 // badge is a state a skill row shows.
 type badge struct {
@@ -186,176 +370,6 @@ func (a *app) where(path string) string {
 	return strings.Join(parts, ", ")
 }
 
-// skillDetail is the skill chosen: what it is, where it is enabled, and its
-// SKILL.md.
-func (a *app) skillDetail(c *ui.Context, sk core.Skill) {
-	t := c.Theme()
-	ui.Scroll(c.Key(sk.Path)).Fill().Children(func() {
-		ui.Column(c).Padding(20, 24).Gap(18).MaxWidth(820).Children(func() {
-			ui.Column(c).Gap(6).Children(func() {
-				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, sk.Name).FontSize(20).Bold().Grow(1).Selectable()
-					a.skillActions(c, sk)
-				})
-				if sk.Description != "" {
-					ui.Text(c, sk.Description).Selectable()
-				}
-				a.sourceLine(c, sk)
-			})
-			for _, n := range a.notes(sk) {
-				note(c, n)
-			}
-			if sk.Valid() {
-				a.enabledIn(c, sk)
-			}
-			if d, ok := a.data.docs[sk.Path]; ok {
-				docView(c, d.meta.License, d.meta.Compatibility, d.meta.AllowedTools, d.meta.Metadata, d.body, &a.skills.md)
-			}
-		})
-	}).Background(t.Background)
-}
-
-// sourceLine is where a skill came from, a link to its repository page when
-// there is one, and its library path.
-func (a *app) sourceLine(c *ui.Context, sk core.Skill) {
-	t := c.Theme()
-	ui.Row(c).Gap(6).Wrap().AlignItems(ui.Center).Children(func() {
-		label := sk.SourceLabel()
-		if url := webURL(sk); url != "" {
-			ui.Button(c, "").Padding(0).Background(ui.Transparent).BorderWidth(0).Tooltip(url).Children(func() {
-				ui.Text(c, label).FontSize(12).TextColor(t.Accent)
-				ui.Icon(c, iconExternal).FontSize(11).TextColor(t.Accent)
-			}).OnClick(func() { c.Services().OpenURL(url) })
-		} else {
-			muted(c, label).FontSize(12)
-		}
-		muted(c, "·").FontSize(12)
-		muted(c, sk.Path).FontSize(12).Selectable()
-	})
-}
-
-// webURL is the repository page of a git skill, or "".
-func webURL(sk core.Skill) string {
-	if sk.Linked || sk.Record == nil || sk.Record.Source.Type != "git" {
-		return ""
-	}
-	src := sk.Record.Source
-	return source.WebURL(src.URL, src.Ref, src.Path)
-}
-
-// skillActions are the title's buttons: Update when the last check found
-// one, and the other actions in a menu.
-func (a *app) skillActions(c *ui.Context, sk core.Skill) {
-	if a.working(c, sk.Path) {
-		ui.Spinner(c).Label("Working")
-	}
-	if a.updates.checks[sk.Path].State == core.Available {
-		ui.PrimaryButton(c, "Update").Label("Update " + sk.Name).Disabled(a.working(c, sk.Path)).OnClick(func() { a.update(sk) })
-	}
-	iconButton(c, iconMore, "More").Disabled(a.working(c, sk.Path)).PopoverMenuButton(func(m *ui.Menu) {
-		if m.Item("Update").Disabled(!sk.Updatable() && !hasCopies(a.data.usedIn(sk.Path), sk.Path)).Chosen() {
-			a.update(sk)
-		}
-		m.Separator()
-		if m.Item("Reveal in Finder").Chosen() {
-			a.desk.reveal(sk.Dir)
-		}
-		if m.Item("Open SKILL.md").Disabled(!sk.Valid()).Chosen() {
-			a.desk.open(sk.Dir + "/SKILL.md")
-		}
-		m.Separator()
-		if m.Item("Remove from Library…").Chosen() {
-			a.confirmRemove(sk)
-		}
-	})
-}
-
-// notes say what is wrong with a skill, or what its last check found.
-func (a *app) notes(sk core.Skill) []string {
-	var out []string
-	if !sk.Valid() {
-		out = append(out, "This skill can't be enabled: "+sk.Issue)
-	}
-	if sk.Modified {
-		out = append(out, "Edited in the library since it was added; updating replaces the edits.")
-	}
-	switch c := a.updates.checks[sk.Path]; c.State {
-	case core.RemovedUpstream:
-		out = append(out, "Removed upstream; the library keeps its copy.")
-	case core.CheckFailed:
-		out = append(out, "Couldn't check for an update: "+c.Err.Error())
-	}
-	return out
-}
-
-// note is a callout saying something needs attention.
-func note(c *ui.Context, text string) {
-	t := c.Theme()
-	ui.Row(c).Gap(8).Padding(10, 12).Radius(8).Background(t.Warning.Alpha(0.1)).Children(func() {
-		ui.Icon(c, iconWarning).TextColor(t.Warning)
-		ui.Text(c, text).Grow(1).Selectable()
-	})
-}
-
-// enabledIn lists the places with the skill, Global always, and enables it
-// in a project.
-func (a *app) enabledIn(c *ui.Context, sk core.Skill) {
-	t := c.Theme()
-	ui.Column(c).Gap(8).Children(func() {
-		section(c, "Enabled in")
-		ui.Column(c).Radius(10).Border(1, t.Border).Dividers(1, t.Border).Children(func() {
-			for i := range a.data.places {
-				p := &a.data.places[i]
-				e, ok := p.enablement(sk.Path)
-				switch {
-				case ok:
-					a.placementRow(c, p, sk, e, placeLead(c, p.scope))
-				case p.scope.IsGlobal():
-					a.offRow(c, p, sk)
-				}
-			}
-			a.enableInProject(c, sk)
-		})
-	})
-}
-
-// offRow is Global without the skill.
-func (a *app) offRow(c *ui.Context, p *place, sk core.Skill) {
-	ui.Row(c.Key("off")).Gap(10).AlignItems(ui.Center).Padding(8, 12).Children(func() {
-		ui.Row(c).Grow(1).MinWidth(0).Gap(10).AlignItems(ui.Center).Children(placeLead(c, p.scope))
-		muted(c, "Not enabled")
-		ui.Button(c, "Enable").Padding(3, 10).Disabled(a.working(c, sk.Path)).OnClick(func() {
-			a.enable(p.scope, sk, core.EnableOptions{Mode: core.Link})
-		})
-	})
-}
-
-// enableInProject enables the skill in a known project that doesn't have it,
-// or in a folder chosen.
-func (a *app) enableInProject(c *ui.Context, sk core.Skill) {
-	t := c.Theme()
-	ui.Row(c.Key("add")).Padding(6, 8).Children(func() {
-		ui.Button(c, "").Padding(3, 6).Gap(6).Background(ui.Transparent).BorderWidth(0).Disabled(a.working(c, sk.Path)).Children(func() {
-			ui.Icon(c, iconAdd).TextColor(t.Accent)
-			ui.Text(c, "Enable in Project…").TextColor(t.Accent)
-		}).PopoverMenuButton(func(m *ui.Menu) {
-			for i := range a.data.places {
-				p := &a.data.places[i]
-				if _, ok := p.enablement(sk.Path); ok || p.scope.IsGlobal() {
-					continue
-				}
-				if m.Item(tilde(p.scope.Root)).Chosen() {
-					a.enable(p.scope, sk, core.EnableOptions{Mode: core.Link})
-				}
-			}
-			m.Separator()
-			if m.Item("Choose Folder…").Chosen() {
-				a.chooseProject(func(sc core.Scope) { a.enable(sc, sk, core.EnableOptions{}) })
-			}
-		})
-	})
-}
-
 // chooseProject asks for a folder, and gives fn its project (§6 Scope).
 func (a *app) chooseProject(fn func(core.Scope)) {
 	a.chooseFolder("Choose a project folder", func(dir string) {
@@ -373,33 +387,6 @@ func hasCopies(places []*place, path string) bool {
 	return slices.ContainsFunc(places, func(p *place) bool {
 		e, ok := p.enablement(path)
 		return ok && slices.ContainsFunc(e.Placements, func(pl core.Placement) bool { return pl.Kind == core.KindCopy })
-	})
-}
-
-// docView shows a SKILL.md: the optional frontmatter fields that are set,
-// then the body.
-func docView(c *ui.Context, license, compatibility, tools string, meta map[string]string, body string, md *markdown.Options) {
-	t := c.Theme()
-	ui.Column(c).Gap(10).Children(func() {
-		section(c, "SKILL.md")
-		fields := [][2]string{{"License", license}, {"Compatibility", compatibility}, {"Allowed tools", tools}}
-		for _, k := range slices.Sorted(maps.Keys(meta)) {
-			fields = append(fields, [2]string{k, meta[k]})
-		}
-		ui.Column(c).Gap(4).Children(func() {
-			for _, f := range fields {
-				if f[1] == "" {
-					continue
-				}
-				ui.Row(c).Gap(8).Children(func() {
-					muted(c, f[0]).FontSize(12).Width(110).Shrink(0)
-					ui.Text(c, f[1]).FontSize(12).Grow(1).Selectable()
-				})
-			}
-		})
-		ui.Column(c).Padding(16, 18).Radius(10).Background(t.Surface).Children(func() {
-			markdown.View(c, body, md)
-		})
 	})
 }
 
@@ -430,21 +417,17 @@ func (s *updatesState) close() {
 	}
 }
 
-// updateActions are the Skills title bar's: checking for updates, and
-// updating all that the check found.
+// updateActions are the Skills bar's: updating all that the last check
+// found, and checking again.
 func (a *app) updateActions(c *ui.Context) {
 	if a.updates.checking {
-		ui.Spinner(c).Label("Checking")
-		muted(c, fmt.Sprintf("Checking %d of %d…", a.updates.done, a.updates.total)).FontSize(12)
+		spinner(c, "Checking for updates").Margin(0, 7)
 		return
 	}
 	if n := a.updates.available(); n > 0 && a.updates.u != nil {
-		ui.PrimaryButton(c, fmt.Sprintf("Update All (%d)", n)).Disabled(a.working(c, "updates")).OnClick(a.updateAll)
+		button(c, "Update All", primary).Disabled(a.working(c, "updates")).OnClick(a.updateAll)
 	}
-	ui.Button(c, "").Gap(6).Disabled(a.working(c, "updates") || !a.data.read).Children(func() {
-		ui.Icon(c, iconRefresh)
-		ui.Text(c, "Check for Updates").SingleLine()
-	}).OnClick(a.checkUpdates)
+	toolButton(c, iconRefresh, "Check for Updates").Disabled(a.working(c, "updates")).OnClick(a.checkUpdates)
 }
 
 // checkUpdates checks every updatable skill (§7).
