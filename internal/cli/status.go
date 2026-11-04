@@ -118,7 +118,7 @@ listed dimmed.`,
 }
 
 // printStatus prints a scope's enablements, then its broken and unmanaged
-// entries. dup holds the names shown with their library path.
+// entries. dup holds the names several library skills share.
 func (a *app) printStatus(st core.Status, dup map[string]bool) {
 	if st.Scope.IsGlobal() {
 		a.println(bold("Global"))
@@ -132,10 +132,6 @@ func (a *app) printStatus(st core.Status, dup map[string]bool) {
 	}
 	var rows [][]string
 	for _, e := range s.Enablements {
-		name := e.Name
-		if dup[e.Name] {
-			name += " " + dim(e.Skill)
-		}
 		var flags []string
 		if e.Outdated {
 			flags = append(flags, "outdated")
@@ -146,7 +142,7 @@ func (a *app) printStatus(st core.Status, dup map[string]bool) {
 		if e.Partial {
 			flags = append(flags, "partial")
 		}
-		rows = append(rows, []string{name, e.Mode, a.agentNames(e.Agents), styleWarn.Render(strings.Join(flags, ", "))})
+		rows = append(rows, []string{e.Name + dupDir(e.Name, e.Skill, dup), e.Mode, a.agentNames(e.Agents), styleWarn.Render(strings.Join(flags, ", "))})
 	}
 	for _, p := range slices.Concat(s.Broken, s.Others) {
 		rows = append(rows, []string{dim(p.Name), dim(p.Kind), dim(scopePath(st.Scope, p.Path))})

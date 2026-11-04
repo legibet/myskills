@@ -408,15 +408,18 @@ func sourceList(c *ui.Context, s *ui.ListState, n int, label string, row func(i 
 // listRow is a row of a source list: a title line and a detail line, the
 // detail in white on the accent.
 func listRow(c *ui.Context, onAccent bool, title func(), detail string) {
-	p := colors(c)
-	sub := p.text2
-	if onAccent {
-		sub = c.Theme().AccentText.Alpha(0.8)
-	}
 	ui.Column(c).Height(50).Justify(ui.Center).Padding(0, 10).Gap(3).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).MinWidth(0).Children(title)
-		ui.Text(c, detail).FontSize(textSmall).TextColor(sub).SingleLine()
+		ui.Text(c, detail).FontSize(textSmall).TextColor(rowSub(c, onAccent)).SingleLine()
 	})
+}
+
+// rowSub is the color of a list row's secondary text.
+func rowSub(c *ui.Context, onAccent bool) ui.Color {
+	if onAccent {
+		return c.Theme().AccentText.Alpha(0.8)
+	}
+	return colors(c).text2
 }
 
 // rowTag is a tag in a list row, white on the accent.

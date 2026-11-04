@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -260,13 +261,21 @@ func (d *data) agentNames(ids []string) string {
 	return strings.Join(names, ", ")
 }
 
-// skillName is a skill's name, with its library path when several skills
-// share the name (§8).
-func (d *data) skillName(sk core.Skill) string {
-	if d.dup[sk.Name] {
-		return sk.Name + " · " + sk.Path
+// skillDir is the folder shown after a skill's name when other skills share the name (§8).
+func (d *data) skillDir(sk core.Skill) string {
+	if dir := path.Dir(sk.Path); dir != "." && d.dup[sk.Name] {
+		return dir
 	}
-	return sk.Name
+	return ""
+}
+
+// skillTitle is a skill's name with its skillDir.
+func (a *app) skillTitle(c *ui.Context, sk core.Skill, dirColor ui.Color) ui.Element {
+	spans := []ui.Span{{Text: sk.Name, Weight: 600}}
+	if dir := a.data.skillDir(sk); dir != "" {
+		spans = append(spans, ui.Span{Text: "  " + dir, Color: dirColor})
+	}
+	return ui.RichText(c, spans...).SingleLine()
 }
 
 // placeName is what a place is called: Global, or the project folder's name.

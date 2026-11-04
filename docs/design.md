@@ -326,8 +326,9 @@ myskills --version
 ```
 
 - `<skill>` = library path or name; an ambiguous name errors with the candidates.
-- `list`, `status` and `show` name a skill by its name, followed (dim) by its library path
-  only when several library skills share that name. Source labels: `owner/repo` for git, the
+- `list`, `status` and `show` name a skill by its name, followed (dim) by the folder of its
+  library path only when several library skills share that name (`review a`; the name is
+  the path's last element, and a top-level skill shows no folder). Source labels: `owner/repo` for git, the
   linked folder (`~/agent-skills`) for skills in a linked entry, `local` otherwise; `show`
   prints the folder of a local source instead of `local`.
 - Output: one line per item, `✓` / `!` / `✗` + dim details; colors follow the terminal
@@ -382,7 +383,7 @@ changes made is printed to the normal screen.
 - Status lines and preview notes state what happened or what is; keys are left to the help bar.
 
 Skills view
-- Rows: every library skill: glyph, name, source label (§8; the library path only for a name
+- Rows: every library skill: glyph, name, source label (§8; the library path's folder only for a name
   several skills share), flags (`outdated`, `modified`, `update`, `invalid`) and a right
   column saying how the skill is enabled in the active scope: `link`, `copy`, `mixed`, or
   `global` for a project that gets it only from the global scope; `broken`, `conflict` or
@@ -486,8 +487,8 @@ Window and data
 
 Skills
 - The list: every library skill, filtered by a search field (name, description, source) and
-  `All` / `Enabled` (anywhere) / `Unused` (nowhere). A row: the name (the library path too
-  when names repeat, §8), badges (`Invalid`, `Update`, `Outdated`, `Modified`), and the
+  `All` / `Enabled` (anywhere) / `Unused` (nowhere). A row: the name (and, secondary, its library
+  path's folder when names repeat, §8), badges (`Invalid`, `Update`, `Outdated`, `Modified`), and the
   source label with where it is enabled (`Global, 2 projects`, `Not enabled`).
 - The list's bar: `Check for Updates` (every updatable skill; progress while it runs), then
   `Update All` while the check found updates; its count line says how many.

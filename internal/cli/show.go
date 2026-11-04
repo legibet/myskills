@@ -43,11 +43,7 @@ its SKILL.md, rendered in a terminal and as plain markdown otherwise.`,
 				return err
 			}
 
-			title := bold(sk.Name)
-			if core.DuplicateNames(lib)[sk.Name] {
-				title += " " + dim(sk.Path)
-			}
-			a.println(title)
+			a.println(bold(sk.Name) + dupDir(sk.Name, sk.Path, core.DuplicateNames(lib)))
 			if sk.Description != "" {
 				a.println(sanitize.Line(sk.Description))
 			}

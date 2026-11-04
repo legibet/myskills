@@ -127,7 +127,7 @@ func (a *app) libraryDetail() string {
 func (a *app) skillRow(c *ui.Context, sk core.Skill, onAccent bool) {
 	t := c.Theme()
 	listRow(c, onAccent, func() {
-		ui.Text(c, a.data.skillName(sk)).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
+		a.skillTitle(c, sk, rowSub(c, onAccent)).Grow(1).Shrink(1).MinWidth(0)
 		for _, b := range a.badges(sk) {
 			rowTag(c, b.text, b.color(t), onAccent)
 		}

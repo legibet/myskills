@@ -81,10 +81,6 @@ and issues: invalid skills, local modifications, missing linked folders.`,
 			dup := core.DuplicateNames(lib)
 			rows := [][]string{{bold("NAME"), bold("SOURCE"), bold("ENABLED"), bold("ISSUES")}}
 			for _, sk := range lib {
-				name := sk.Name
-				if dup[sk.Name] {
-					name += " " + dim(sk.Path)
-				}
 				where := whereEnabled(usage[sk.Path])
 				if where == "" {
 					where = dim("—")
@@ -96,7 +92,7 @@ and issues: invalid skills, local modifications, missing linked folders.`,
 				case sk.Modified:
 					issues = styleWarn.Render("modified")
 				}
-				rows = append(rows, []string{name, dim(sk.SourceLabel()), where, issues})
+				rows = append(rows, []string{sk.Name + dupDir(sk.Name, sk.Path, dup), dim(sk.SourceLabel()), where, issues})
 			}
 			a.println(table("", rows))
 			return nil

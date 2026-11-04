@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -31,6 +32,14 @@ var (
 
 func dim(s string) string  { return styleDim.Render(s) }
 func bold(s string) string { return styleBold.Render(s) }
+
+// dupDir is the dim folder shown after a skill's name when other skills share the name (§8).
+func dupDir(name, libPath string, dup map[string]bool) string {
+	if dir := path.Dir(libPath); dir != "." && dup[name] {
+		return " " + dim(dir)
+	}
+	return ""
+}
 
 // ok prints a success line to stdout.
 func (a *app) ok(msg string) {

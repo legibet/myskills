@@ -287,15 +287,16 @@ func TestAddLocal(t *testing.T) {
 	if !isLink(t, e.libDir("collection")) {
 		t.Error("collection should be a link")
 	}
-	// "one" is both a copied skill and in the collection: only those rows
-	// show the library path. Linked skills show the folder as their source.
+	// "one" is both a copied skill and in the collection: only the
+	// collection's row shows its folder, as the top-level one has none.
+	// Linked skills show the folder as their source.
 	r = e.ok(e.home, "list")
-	contains(t, r.out, "one one ", "one collection/one  "+coll, "two ")
-	if strings.Contains(r.out, "collection/two") {
-		t.Errorf("library path shown for a unique name:\n%s", r.out)
-	}
+	contains(t, r.out, "one             local", "one collection  "+coll, "two             "+coll)
 	r = e.ok(e.home, "show", "one")
-	contains(t, r.out, "one one\n", "source   "+filepath.Join(coll, "one"))
+	if !strings.HasPrefix(r.out, "one\n") {
+		t.Errorf("show of a top-level skill starts with %q", strings.SplitN(r.out, "\n", 2)[0])
+	}
+	contains(t, r.out, "source   "+filepath.Join(coll, "one"))
 	r = e.ok(e.home, "show", "collection/two")
 	contains(t, r.out, "two\nThe two skill.", "source   "+coll)
 
@@ -384,14 +385,14 @@ func TestAmbiguousSkill(t *testing.T) {
 	r := e.fails(e.home, "show", "review")
 	contains(t, r.err, `"review" matches several skills: a/review, b/review`)
 	r = e.ok(e.home, "show", "a/review")
-	contains(t, r.out, "review a/review\n")
+	contains(t, r.out, "review a\n")
 
-	// A repeated name shows its library path.
+	// A repeated name shows the folder of its library path.
 	r = e.ok(e.home, "list")
-	contains(t, r.out, "review a/review  "+e.path("a"), "review b/review  "+e.path("b"))
+	contains(t, r.out, "review a  "+e.path("a"), "review b  "+e.path("b"))
 	e.ok(e.home, "enable", "-g", "a/review")
 	r = e.ok(e.home, "status")
-	contains(t, r.out, "Global\n  review a/review  link")
+	contains(t, r.out, "Global\n  review a  link")
 }
 
 func TestEnableDisableLink(t *testing.T) {

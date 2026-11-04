@@ -146,9 +146,9 @@ func (a *app) skillLead(c *ui.Context, sk core.Skill) func() {
 	return func() {
 		p := colors(c)
 		ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(2).Children(func() {
-			name := ui.ButtonBase(c).AlignSelf(ui.Start).MinWidth(0).Label(a.data.skillName(sk)).Tooltip("Show in Skills").Cursor(ui.CursorPointer)
+			name := ui.ButtonBase(c).AlignSelf(ui.Start).MinWidth(0).Label(strings.TrimSpace(sk.Name + " " + a.data.skillDir(sk))).Tooltip("Show in Skills").Cursor(ui.CursorPointer)
 			name.Children(func() {
-				text := ui.Text(c, a.data.skillName(sk)).FontWeight(600).SingleLine()
+				text := a.skillTitle(c, sk, p.text2)
 				if name.Hovered() {
 					text.TextColor(accent(c))
 				}
@@ -232,7 +232,11 @@ func (a *app) addSkillsView(c *ui.Context) {
 					for _, sk := range rows {
 						on := d.picks[sk.Path]
 						ui.Column(c.Key(sk.Path)).Padding(7, 14).Gap(2).Children(func() {
-							if ui.Checkbox(c, &on, a.data.skillName(sk)).Changed() {
+							box := ui.Checkbox(c, &on, sk.Name)
+							if dir := a.data.skillDir(sk); dir != "" {
+								box.Children(func() { ui.Text(c, dir).TextColor(pal.text2).SingleLine().Shrink(1).MinWidth(0) })
+							}
+							if box.Changed() {
 								d.picks[sk.Path] = on
 							}
 							if sk.Description != "" {
