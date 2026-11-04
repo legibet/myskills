@@ -21,7 +21,7 @@ Download the desktop app or the command line tool from the rolling [`latest` rel
 xattr -dr com.apple.quarantine /Applications/MySkills.app
 ```
 
-**Linux** (amd64 or arm64): Download and install `MySkills-linux-<arch>.deb`:
+**Linux**: Download and install `MySkills-linux-<arch>.deb`:
 
 ```sh
 sudo apt install ./MySkills-linux-amd64.deb
@@ -35,7 +35,7 @@ sh MySkills-install.sh MySkills-linux-amd64.tar.gz
 
 ### Command line
 
-Download the archive for your platform (`darwin_arm64`, `darwin_amd64`, `linux_amd64` or `linux_arm64`) and put `myskills` on your `PATH`:
+Download the archive for your platform and put `myskills` on your `PATH`:
 
 ```sh
 curl -fsSL https://github.com/legibet/myskills/releases/latest/download/myskills_darwin_arm64.tar.gz | tar -xz myskills
@@ -71,7 +71,7 @@ myskills update               # update library skills and refresh their copies
 | `~/.myskills/config.json` | default agents and custom agents                  |
 | `~/.myskills/lock.json`   | skill sources, recorded copies and known projects |
 
-Set `MYSKILLS_HOME` to use another location. [`docs/design.md`](docs/design.md) describes the behavior in detail.
+Set `MYSKILLS_HOME` to use another location.
 
 ## Development
 
@@ -83,7 +83,7 @@ make lint    # go vet, mygo vet, golangci-lint
 make publish # replace the latest release with a build of HEAD, once pushed (goreleaser, mygo, gh)
 ```
 
-The desktop app (`app/`) is built with [mygo](https://github.com/egoist/mygo). The Swift macOS app that preceded it is archived on the `macos-app` branch.
+The desktop app (`app/`) is built with [mygo](https://github.com/egoist/mygo).
 
 ## License
 
