@@ -22,6 +22,7 @@ func main() {
 	mygo.App.WhenReady(func() {
 		mygo.App.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
 			{Role: mygo.RoleAppMenu},
+			{Role: mygo.RoleFileMenu}, // Close on macOS, Quit elsewhere
 			{Role: mygo.RoleEditMenu},
 			{Role: mygo.RoleWindowMenu},
 		}))

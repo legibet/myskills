@@ -27,7 +27,7 @@ func TestProjectsList(t *testing.T) {
 
 	h.click("web")
 	h.want("Use review.", "Use tdd.")
-	h.click("Reveal in Finder")
+	h.click(revealLabel)
 	if !slices.Equal(h.revealed, []string{web.Root}) {
 		t.Errorf("revealed %v", h.revealed)
 	}
