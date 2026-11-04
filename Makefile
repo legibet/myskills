@@ -3,7 +3,7 @@
 build:
 	go build -o myskills .
 
-# app builds the desktop app for this Mac into dist/app.
+# app builds the desktop app for this machine's platform into dist/app.
 app:
 	go tool mygo build app
 
@@ -24,6 +24,7 @@ ASSETS = dist/*.tar.gz dist/*.dmg dist/*.deb dist/MySkills-install.sh dist/check
 # app built from HEAD. The app's files get names without its version.
 publish:
 	@test -z "$$(git status --porcelain)" || (echo "Commit your changes before publishing."; exit 1)
+	@git fetch -q origin && git merge-base --is-ancestor HEAD origin/main || (echo "Push HEAD to origin/main before publishing."; exit 1)
 	goreleaser release --snapshot --clean
 	go tool mygo build -platform darwin/universal,linux/amd64,linux/arm64 app
 	cp dist/app/darwin-universal/*.dmg dist/MySkills.dmg

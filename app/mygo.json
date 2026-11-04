@@ -8,5 +8,9 @@
   "out": "../dist/app",
   "macos": {
     "icon": "icon/AppIcon.icon"
+  },
+  "linux": {
+    "comment": "Manage agent skills across your projects",
+    "webview": false
   }
 }
