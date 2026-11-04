@@ -1,8 +1,7 @@
 # myskills — design
 
 Cross-platform Go CLI + TUI for managing agent skills (folders with `SKILL.md`).
-Linux and macOS are first-class; Windows is best effort. Replaces the macOS SwiftUI app
-(archived on the git branch `macos-app`).
+Linux and macOS are first-class; Windows is best effort.
 
 ## 1. Goals and non-goals
 
@@ -24,7 +23,6 @@ Non-goals
 - Team sharing: project manifests, project lockfiles, restore/sync commands.
 - Driving agents' own enable/disable settings.
 - Background update checks, telemetry.
-- Migration code from the macOS app inside the tool (done once, out of band).
 
 ## 2. Concepts
 
@@ -51,8 +49,6 @@ Non-goals
   lock.json               machine-managed records
   .lock                   inter-process mutation lock
 ```
-
-The macOS app's `state.json` is never read or written.
 
 ### config.json
 
