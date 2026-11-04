@@ -81,7 +81,7 @@ func (a *app) skillsView(c *ui.Context) {
 			})
 			ui.Column(c).Padding(0, 12, 10, 12).Gap(8).Children(func() {
 				searchField(c, &a.skills.query, "Search", &a.searchField)
-				segmented(c, &a.skills.filter, "Show", "All", "Enabled", "Unused")
+				filterChips(c, &a.skills.filter, "Show", "All", "Enabled", "Unused")
 			})
 			s := &a.skills.list
 			s.Selected = &a.skills.sel

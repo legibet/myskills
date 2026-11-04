@@ -281,6 +281,29 @@ func segmented(c *ui.Context, selected *int, label string, labels ...string) ui.
 	return parts.Track
 }
 
+// filterChips is one filter of a few over a list: the labels as text, the
+// chosen one filled as the sidebar's choice is.
+func filterChips(c *ui.Context, selected *int, label string, labels ...string) ui.Element {
+	p := colors(c)
+	parts := ui.SegmentedBase(c, selected, len(labels))
+	parts.Track.AlignSelf(ui.Start).Gap(2).Label(label)
+	parts.Track.Children(func() {
+		for i, text := range labels {
+			chip := parts.Segment(i).Height(24).Padding(0, 10).Radius(6).Center().FontSize(textSmall).FontWeight(500).TextColor(p.text2)
+			bg := ui.Transparent
+			switch {
+			case i == *selected:
+				bg = p.navSelected
+				chip.TextColor(p.text)
+			case chip.Hovered():
+				bg = p.hover
+			}
+			chip.Background(chip.AnimateColor("bg", bg, hoverAnimation)).Children(func() { ui.Text(c, text).SingleLine() })
+		}
+	})
+	return parts.Track
+}
+
 // group is a titled card of rows with hairlines between them. rows builds
 // them, each through g.row.
 func group(c *ui.Context, title string, rows func(g *rowGroup)) {
