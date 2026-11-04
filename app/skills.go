@@ -94,7 +94,7 @@ func (a *app) skillsView(c *ui.Context) {
 			list := sourceList(c, s, len(rows), "Skills", func(i int, onAccent bool) { a.skillRow(c, rows[i], onAccent) })
 			list.Children(func() {
 				if len(rows) == 0 {
-					ui.Text(c, "No skills match").FontSize(textSmall).TextColor(colors(c).text2).Padding(20).TextAlign(ui.Center)
+					ui.Text(c, "No skills match").FontSize(textSmall(c)).TextColor(colors(c).text2).Padding(20).TextAlign(ui.Center)
 				}
 			})
 			if list.Changed() && a.skills.sel >= 0 && a.skills.sel < len(rows) {
@@ -174,32 +174,23 @@ func webURL(sk core.Skill) string {
 	return source.WebURL(src.URL, src.Ref, src.Path)
 }
 
-// skillActions are the detail bar's: Update when the last check found one,
-// and the other actions in a menu.
+// skillActions are the detail bar's: its files, removing it, and Update,
+// the primary action while the last check found one.
 func (a *app) skillActions(c *ui.Context, sk core.Skill) {
 	busy := a.working(c, sk.Path)
 	if busy {
 		spinner(c, "Working")
 	}
-	if a.updates.checks[sk.Path].State == core.Available {
-		button(c, "Update", primary).Label("Update " + sk.Name).Disabled(busy).OnClick(func() { a.update(sk) })
+	toolButton(c, iconFolder, revealLabel).OnClick(func() { a.desk.reveal(sk.Dir) })
+	toolButton(c, iconFile, "Open SKILL.md").Disabled(!sk.Valid()).OnClick(func() { a.desk.open(sk.Dir + "/SKILL.md") })
+	toolButton(c, iconTrash, "Remove from Library…").Disabled(busy).OnClick(func() { a.confirmRemove(sk) })
+	if sk.Updatable() || hasCopies(a.data.usedIn(sk.Path), sk.Path) {
+		kind := plain
+		if a.updates.checks[sk.Path].State == core.Available {
+			kind = primary
+		}
+		button(c, "Update", kind).Label("Update "+sk.Name).Disabled(busy).Margin(0, 0, 0, 6).OnClick(func() { a.update(sk) })
 	}
-	toolButton(c, iconMore, "More").Disabled(busy).Menu(func(m *ui.Menu) {
-		if m.Item("Update").Disabled(!sk.Updatable() && !hasCopies(a.data.usedIn(sk.Path), sk.Path)).Chosen() {
-			a.update(sk)
-		}
-		m.Separator()
-		if m.Item(revealLabel).Chosen() {
-			a.desk.reveal(sk.Dir)
-		}
-		if m.Item("Open SKILL.md").Disabled(!sk.Valid()).Chosen() {
-			a.desk.open(sk.Dir + "/SKILL.md")
-		}
-		m.Separator()
-		if m.Item("Remove from Library…").Chosen() {
-			a.confirmRemove(sk)
-		}
-	})
 }
 
 // notes say what is wrong with a skill, or what its last check found.
@@ -281,14 +272,14 @@ func docView(c *ui.Context, license, compatibility, tools string, meta map[strin
 	}
 	fields = slices.DeleteFunc(fields, func(f [2]string) bool { return f[1] == "" })
 	ui.Column(c).Gap(8).Label("SKILL.md").Children(func() {
-		ui.Text(c, "SKILL.md").FontSize(textSmall).FontWeight(600).TextColor(p.text2).Padding(0, 2)
+		ui.Text(c, "SKILL.md").FontSize(textSmall(c)).FontWeight(600).TextColor(p.text2).Padding(0, 2)
 		ui.Column(c).Radius(10).Border(1, p.separator).Clip().Children(func() {
 			if len(fields) > 0 {
 				ui.Column(c).Padding(12, 20).Gap(6).Background(p.card).Children(func() {
 					for _, f := range fields {
 						ui.Row(c).Gap(12).Children(func() {
-							ui.Text(c, f[0]).FontSize(textSmall).TextColor(p.text2).Width(104).Shrink(0)
-							ui.Text(c, f[1]).FontSize(textSmall).Grow(1).Selectable()
+							ui.Text(c, f[0]).FontSize(textSmall(c)).TextColor(p.text2).Width(textSmall(c) * 9).Shrink(0)
+							ui.Text(c, f[1]).FontSize(textSmall(c)).Grow(1).Selectable()
 						})
 					}
 				})

@@ -204,7 +204,7 @@ func TestRemoveFromLibrary(t *testing.T) {
 	h.enable(core.Global, "review", core.EnableOptions{})
 	h.start()
 
-	h.choose("More", "Remove from Library…")
+	h.click("Remove from Library…")
 	h.wantAlert("Remove review from the library?")
 	if msg := h.a.alerts[0].message; !strings.Contains(msg, "Enabled in Global") {
 		t.Errorf("message = %q", msg)

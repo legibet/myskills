@@ -22,7 +22,7 @@ func (a *app) placementRow(c *ui.Context, g *rowGroup, p *place, sk core.Skill, 
 		ui.Row(c).MinWidth(0).Shrink(1).Wrap().Justify(ui.End).Gap(6).AlignItems(ui.Center).Children(func() {
 			if outdated(e) {
 				tag(c, "Outdated", t.Warning).Tooltip("The library changed since these files were copied")
-				button(c, "Refresh", plain).Height(24).Padding(0, 10).FontSize(textSmall).Disabled(busy).OnClick(func() {
+				button(c, "Refresh", plain).MinHeight(24).Padding(3, 10).FontSize(textSmall(c)).Disabled(busy).OnClick(func() {
 					a.start(a.refresh(p.scope, []string{sk.Path}, sk.Path, "Couldn't refresh the copies of "+sk.Name), false)
 				})
 			}
@@ -83,7 +83,7 @@ func (a *app) agentsChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablem
 	pal := colors(c)
 	ui.Popover(c, b, &a.agentsOpen, func() {
 		ui.Column(c).Gap(10).Padding(4, 2).MinWidth(240).MaxWidth(420).Children(func() {
-			ui.Text(c, "Agents").FontSize(textSmall).FontWeight(600).TextColor(pal.text2)
+			ui.Text(c, "Agents").FontSize(textSmall(c)).FontWeight(600).TextColor(pal.text2)
 			for _, d := range p.dirs {
 				placed := slices.ContainsFunc(e.Placements, func(pl core.Placement) bool {
 					return slices.ContainsFunc(pl.Agents, func(id string) bool { return slices.Contains(d.Agents, id) })
@@ -99,7 +99,7 @@ func (a *app) agentsChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablem
 							a.disable(p.scope, sk, e, d.Agents)
 						}
 					}
-					ui.Text(c, tilde(d.Path)).FontSize(textCaption).TextColor(pal.text2).Margin(0, 0, 0, 26).SingleLine()
+					ui.Text(c, tilde(d.Path)).FontSize(textCaption(c)).TextColor(pal.text2).Margin(0, 0, 0, 26).SingleLine()
 				})
 			}
 		})

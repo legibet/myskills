@@ -455,7 +455,7 @@ adding never enables).
 
 ```
 ┌───────────┬────────────────────────────┬────────────────────────────────────────────┐
-│ ● ● ●     │ Skills                  [↻] │                           [Update]  [⋯]  │
+│ ● ● ●     │ Skills                  [↻] │           [folder] [doc] [trash] [Update]  │
 │           │ 12 skills · 1 update        │ review                                     │
 │ Skills   1│ [Search]                    │ agent-skills ↗ · ~/.myskills/skills/review │
 │ Projects  │ [ All | Enabled | Unused ]  │ Review code changes for bugs…              │
@@ -479,11 +479,13 @@ Window and data
 - `⌘1`–`⌘4` choose the pages, `⌘F` focuses the page's search field.
 - Layout: a page is a list beside a detail (Agents is one column). The list's bar, in the
   title bar's height, names the page with a count line and holds the page's actions; the
-  detail's bar holds the actions on what it shows (primary last, the rest in a `⋯` menu or
-  icon buttons with tooltips). Groups of rows (`Enabled in`, a place's skills, the agents)
-  are cards with hairline separators. Menus are native. The list's selection is the accent
+  detail's bar holds the actions on what it shows (icon buttons with tooltips, then the
+  primary action). Groups of rows (`Enabled in`, a place's skills, the agents) are cards
+  with hairline separators. Menus are native. The list's selection is the accent
   while the list has the keyboard, gray otherwise. Light and dark follow the system, the
-  accent too; the look is defined once in `app/style.go`.
+  accent too; the look is defined once in `app/style.go`. Text sizes are steps from the
+  system's body size times the desktop's text scale (GNOME's and Windows's text size), and
+  controls and rows grow with their text.
 
 Skills
 - The list: every library skill, filtered by a search field (name, description, source) and
@@ -493,9 +495,10 @@ Skills
 - The list's bar: `Check for Updates` (every updatable skill; progress while it runs), then
   `Update All` while the check found updates; its count line says how many.
 - The selected skill: name, description, source (a link to the repository page for git
-  sources) and library path; `Update` while the last check found one; a `⋯` menu: Update,
-  Reveal in Finder, Open SKILL.md, Remove from Library…. Notes: why it is invalid,
-  local changes in the library, removed upstream, a failed check.
+  sources) and library path; Reveal in Finder, Open SKILL.md and Remove from Library… as icon
+  buttons, then `Update` for a skill that can update or has copies, the primary action while
+  the last check found one. Notes: why it is invalid, local changes in the library, removed
+  upstream, a failed check.
 - `Enabled in`: a row for Global, always, and one per project that has the skill; then
   `Enable in Project…`, a menu of the known projects that don't have it and `Choose
   Folder…` (resolved as §6 Scope; the home directory and `/` are refused).

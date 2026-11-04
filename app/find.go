@@ -199,7 +199,7 @@ func (a *app) findView(c *ui.Context) {
 				toolButton(c, iconFolder, "Choose Folder…").OnClick(a.chooseSource)
 			})
 			ui.Column(c).Padding(0, 12, 10, 12).Gap(8).Children(func() {
-				field, changed := searchField(c, &p.query, "Search skills.sh or enter a source", &a.searchField)
+				field, changed := searchField(c, &p.query, "Search or enter a source", &a.searchField)
 				field.Label("Search skills.sh, or enter owner/repo, a git URL or a folder").AutoFocus()
 				if changed {
 					a.queryChanged(c.Now())
@@ -578,20 +578,20 @@ func (a *app) sourceBar(c *ui.Context) {
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(8, 8, 8, 12).Radius(8).Background(pal.card).Border(1, pal.separator).Children(func() {
 		ui.Icon(c, icon).Size(15, 15).Shrink(0).TextColor(pal.text2)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
-			ui.Text(c, sourceName(spec)).FontSize(textSmall).FontWeight(600).SingleLine()
-			ui.Text(c, sub).FontSize(textCaption).TextColor(pal.text2).SingleLine()
+			ui.Text(c, sourceName(spec)).FontSize(textSmall(c)).FontWeight(600).SingleLine()
+			ui.Text(c, sub).FontSize(textCaption(c)).TextColor(pal.text2).SingleLine()
 		})
 		key := "link:" + spec.Path
 		switch {
 		case a.busy[findFetch], a.working(c, key):
 			spinner(c, "Working")
 		case !p.browsing:
-			button(c, "Fetch", primary).Height(24).Padding(0, 10).FontSize(textSmall).OnClick(func() { a.fetch(spec) })
+			button(c, "Fetch", primary).MinHeight(24).Padding(3, 10).FontSize(textSmall(c)).OnClick(func() { a.fetch(spec) })
 		case p.fetched == nil || !local:
 		case slices.ContainsFunc(a.data.lib, func(sk core.Skill) bool { return sk.Linked && sk.LinkTarget == spec.Path }):
 			tag(c, "Linked", pal.green)
 		default:
-			iconTextButton(c, iconLink, "Link Folder", plain).Height(24).Padding(0, 10).FontSize(textSmall).
+			iconTextButton(c, iconLink, "Link Folder", plain).MinHeight(24).Padding(3, 10).FontSize(textSmall(c)).
 				Tooltip("Add the folder to the library as a link: its skills stay where they are").OnClick(func() { a.linkFolder(spec.Path) })
 		}
 	})
@@ -619,7 +619,7 @@ func (a *app) findRowView(c *ui.Context, r findRow, onAccent bool) {
 			}
 			switch state, _ := a.rowState(r); state {
 			case "":
-				button(c, "Add", plain).Height(22).Padding(0, 10).FontSize(textSmall).Label("Add " + r.name()).
+				button(c, "Add", plain).MinHeight(22).Padding(2, 10).FontSize(textSmall(c)).Label("Add " + r.name()).
 					Disabled(r.res != nil && a.stale()).OnClick(func() { a.add(r) })
 			default:
 				rowTag(c, state, stateColor(c, state), onAccent)
@@ -688,7 +688,7 @@ func (a *app) findDetail(c *ui.Context, r findRow) {
 			case !loaded:
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 					spinner(c, "Loading")
-					ui.Text(c, "Loading SKILL.md…").FontSize(textSmall).TextColor(pal.text2)
+					ui.Text(c, "Loading SKILL.md…").FontSize(textSmall(c)).TextColor(pal.text2)
 				})
 			case pv.err != nil:
 				note(c, "Couldn't load SKILL.md: "+pv.err.Error())
@@ -752,7 +752,7 @@ func (a *app) findEmpty(c *ui.Context) {
 			}
 			ui.Column(c).Grow(1).Center().Gap(10).Children(func() {
 				spinner(c, "Working")
-				ui.Text(c, label).FontSize(textSmall).TextColor(colors(c).text2)
+				ui.Text(c, label).FontSize(textSmall(c)).TextColor(colors(c).text2)
 			})
 		case source.IsExplicit(q):
 			emptyState(c, "Fetch to see its skills", "Nothing is added to your library until you choose.", nil)

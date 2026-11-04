@@ -62,13 +62,14 @@ var darkPalette = palette{
 	red:         ui.Hex("#ff453a"),
 }
 
-// The type scale, in DIPs.
-const (
-	textTitle   = 22 // an item's title in a detail pane
-	textBody    = 13
-	textSmall   = 12
-	textCaption = 11
-)
+// The type scale: steps from the body text, the theme's FontSize, as mygo's
+// own widgets size theirs. The body is the system's size (13 on macOS, 14
+// elsewhere) times the desktop's text scale, so all text follows that.
+func textTitle(c *ui.Context) float32   { return c.Theme().FontSize + 9 } // an item's title in a detail pane
+func textHeading(c *ui.Context) float32 { return c.Theme().FontSize + 2 } // a dialog's or an empty pane's title
+func textBody(c *ui.Context) float32    { return c.Theme().FontSize }
+func textSmall(c *ui.Context) float32   { return c.Theme().FontSize - 1 }
+func textCaption(c *ui.Context) float32 { return c.Theme().FontSize - 2 }
 
 // barHeight is the height of the bars at the top of the panes, which the
 // window controls sit in.
@@ -103,11 +104,6 @@ func applyTheme(c *ui.Context) {
 	t.AccentPressed = t.Accent.Mix(ui.RGB(0, 0, 0), 0.2)
 	t.Danger, t.Warning, t.Success = p.red, p.orange, p.green
 	t.Radius = 6
-	scale := c.Preferences().TextScale
-	if scale <= 0 {
-		scale = 1
-	}
-	t.FontSize = textBody * scale
 	c.SetTheme(&t)
 }
 
@@ -121,9 +117,9 @@ func bar(c *ui.Context) ui.Element {
 func paneTitle(c *ui.Context, title, detail string) {
 	p := colors(c)
 	ui.Column(c).Grow(1).MinWidth(0).Gap(1).Children(func() {
-		ui.Text(c, title).FontSize(textBody).FontWeight(700).SingleLine()
+		ui.Text(c, title).FontSize(textBody(c)).FontWeight(700).SingleLine()
 		if detail != "" {
-			ui.Text(c, detail).FontSize(textCaption).TextColor(p.text2).SingleLine()
+			ui.Text(c, detail).FontSize(textCaption(c)).TextColor(p.text2).SingleLine()
 		}
 	})
 }
@@ -146,8 +142,8 @@ func button(c *ui.Context, title string, kind buttonKind) ui.Element {
 // iconTextButton is a push button with an icon before its title.
 func iconTextButton(c *ui.Context, icon *ui.SVG, title string, kind buttonKind) ui.Element {
 	p := colors(c)
-	b := ui.ButtonBase(c).Height(26).Padding(0, 12).Radius(6).Gap(6).Justify(ui.Center).Shrink(0).
-		FontSize(textBody).FontWeight(500).TextColor(p.text).Label(title)
+	b := ui.ButtonBase(c).MinHeight(26).Padding(3, 12).Radius(6).Gap(6).Justify(ui.Center).Shrink(0).
+		FontSize(textBody(c)).FontWeight(500).TextColor(p.text).Label(title)
 	fill := p.fill
 	switch kind {
 	case primary:
@@ -191,7 +187,7 @@ func toolButton(c *ui.Context, icon *ui.SVG, label string) ui.Element {
 
 // linkButton is an action written in the accent color, as in a row.
 func linkButton(c *ui.Context, icon *ui.SVG, title string) ui.Element {
-	b := ui.ButtonBase(c).Gap(5).AlignItems(ui.Center).FontSize(textBody).FontWeight(500).Label(title).Cursor(ui.CursorPointer)
+	b := ui.ButtonBase(c).Gap(5).AlignItems(ui.Center).FontSize(textBody(c)).FontWeight(500).Label(title).Cursor(ui.CursorPointer)
 	color := accent(c)
 	if b.Hovered() {
 		color = color.Mix(ui.RGB(0, 0, 0), 0.15)
@@ -209,8 +205,8 @@ func linkButton(c *ui.Context, icon *ui.SVG, title string) ui.Element {
 // change it. label names what it chooses; its value is spoken with it.
 func popUp(c *ui.Context, label, value string) ui.Element {
 	p := colors(c)
-	b := ui.ButtonBase(c).Height(24).Padding(0, 6, 0, 9).Radius(6).Gap(6).AlignItems(ui.Center).MinWidth(0).
-		FontSize(textSmall).TextColor(p.text).Label(label).Value(value).Role(ui.RolePopUpButton)
+	b := ui.ButtonBase(c).MinHeight(24).Padding(3, 6, 3, 9).Radius(6).Gap(6).AlignItems(ui.Center).MinWidth(0).
+		FontSize(textSmall(c)).TextColor(p.text).Label(label).Value(value).Role(ui.RolePopUpButton)
 	fill := p.fill
 	switch {
 	case b.Pressed():
@@ -227,7 +223,7 @@ func popUp(c *ui.Context, label, value string) ui.Element {
 
 // tag is a small colored label for a state, as "Outdated".
 func tag(c *ui.Context, text string, color ui.Color) ui.Element {
-	return ui.Text(c, text).FontSize(textCaption).FontWeight(600).TextColor(color).Background(color.Alpha(0.12)).
+	return ui.Text(c, text).FontSize(textCaption(c)).FontWeight(600).TextColor(color).Background(color.Alpha(0.12)).
 		Padding(1, 6).Radius(4).SingleLine().Shrink(0)
 }
 
@@ -238,10 +234,10 @@ func searchField(c *ui.Context, query *string, placeholder string, h *ui.Handle)
 	p := colors(c)
 	var input ui.Element
 	cleared := false
-	box := ui.Row(c).Height(28).Gap(6).Padding(0, 6, 0, 8).Radius(7).Background(p.fill).TextColor(p.text2).Cursor(ui.CursorText)
+	box := ui.Row(c).MinHeight(28).Gap(6).Padding(4, 6, 4, 8).Radius(7).Background(p.fill).TextColor(p.text2).Cursor(ui.CursorText)
 	box.Children(func() {
 		ui.Icon(c, iconFind).Size(14, 14).Shrink(0)
-		input = ui.TextInputBase(c, query).Grow(1).Shrink(1).MinWidth(0).FontSize(textBody).TextColor(p.text).
+		input = ui.TextInputBase(c, query).Grow(1).Shrink(1).MinWidth(0).FontSize(textBody(c)).TextColor(p.text).
 			Placeholder(placeholder).Label(placeholder).FocusRing(false)
 		if h != nil {
 			input.Bind(h)
@@ -268,10 +264,10 @@ func searchField(c *ui.Context, query *string, placeholder string, h *ui.Handle)
 func segmented(c *ui.Context, selected *int, label string, labels ...string) ui.Element {
 	p := colors(c)
 	parts := ui.SegmentedBase(c, selected, len(labels))
-	parts.Track.Height(26).Padding(2).Radius(7).Background(p.fill).Label(label)
+	parts.Track.MinHeight(26).Padding(2).Radius(7).Background(p.fill).Label(label)
 	parts.Track.Children(func() {
 		for i, text := range labels {
-			seg := parts.Segment(i).Grow(1).Basis(0).Radius(5).Center().FontSize(textSmall).FontWeight(500).TextColor(p.text2)
+			seg := parts.Segment(i).Grow(1).Basis(0).Radius(5).Center().FontSize(textSmall(c)).FontWeight(500).TextColor(p.text2)
 			if i == *selected {
 				seg.Background(c.Theme().Background.Mix(p.text, 0.02)).TextColor(p.text).Shadow(0, 1, 2, 0, ui.RGBA(0, 0, 0, 0.12))
 			}
@@ -289,7 +285,7 @@ func filterChips(c *ui.Context, selected *int, label string, labels ...string) u
 	parts.Track.AlignSelf(ui.Start).Gap(2).Label(label)
 	parts.Track.Children(func() {
 		for i, text := range labels {
-			chip := parts.Segment(i).Height(24).Padding(0, 10).Radius(6).Center().FontSize(textSmall).FontWeight(500).TextColor(p.text2)
+			chip := parts.Segment(i).MinHeight(24).Padding(3, 10).Radius(6).Center().FontSize(textSmall(c)).FontWeight(500).TextColor(p.text2)
 			bg := ui.Transparent
 			switch {
 			case i == *selected:
@@ -310,7 +306,7 @@ func group(c *ui.Context, title string, rows func(g *rowGroup)) {
 	p := colors(c)
 	ui.Column(c).MinWidth(0).Gap(8).Label(title).Children(func() {
 		if title != "" {
-			ui.Text(c, title).FontSize(textSmall).FontWeight(600).TextColor(p.text2).Padding(0, 2)
+			ui.Text(c, title).FontSize(textSmall(c)).FontWeight(600).TextColor(p.text2).Padding(0, 2)
 		}
 		g := &rowGroup{line: p.separator}
 		ui.Column(c).Radius(10).Background(p.card).Border(1, p.separator).Clip().Children(func() { rows(g) })
@@ -343,7 +339,7 @@ func rowText(c *ui.Context, title, detail string) {
 	ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(2).Children(func() {
 		ui.Text(c, title).FontWeight(600).SingleLine()
 		if detail != "" {
-			ui.Text(c, detail).FontSize(textSmall).TextColor(p.text2).SingleLine()
+			ui.Text(c, detail).FontSize(textSmall(c)).TextColor(p.text2).SingleLine()
 		}
 	})
 }
@@ -358,7 +354,7 @@ func note(c *ui.Context, text string) {
 	p := colors(c)
 	ui.Row(c).Gap(10).Padding(10, 12).Radius(8).AlignItems(ui.Start).Background(p.orange.Alpha(0.1)).Children(func() {
 		ui.Icon(c, iconWarning).Size(15, 15).Shrink(0).TextColor(p.orange).Margin(1, 0, 0, 0)
-		ui.Text(c, text).FontSize(textSmall).LineHeight(1.4).Grow(1).Selectable()
+		ui.Text(c, text).FontSize(textSmall(c)).LineHeight(1.4).Grow(1).Selectable()
 	})
 }
 
@@ -366,9 +362,9 @@ func note(c *ui.Context, text string) {
 func emptyState(c *ui.Context, title, detail string, actions func()) {
 	p := colors(c)
 	ui.Column(c).Grow(1).Center().Gap(6).Padding(24).Children(func() {
-		ui.Text(c, title).FontSize(15).FontWeight(600)
+		ui.Text(c, title).FontSize(textHeading(c)).FontWeight(600)
 		if detail != "" {
-			ui.Text(c, detail).FontSize(textSmall).TextColor(p.text2).TextAlign(ui.Center).LineHeight(1.4).MaxWidth(340)
+			ui.Text(c, detail).FontSize(textSmall(c)).TextColor(p.text2).TextAlign(ui.Center).LineHeight(1.4).MaxWidth(340)
 		}
 		if actions != nil {
 			ui.Row(c).Gap(8).Margin(10, 0, 0, 0).Children(actions)
@@ -408,9 +404,9 @@ func sourceList(c *ui.Context, s *ui.ListState, n int, label string, row func(i 
 // listRow is a row of a source list: a title line and a detail line, the
 // detail in white on the accent.
 func listRow(c *ui.Context, onAccent bool, title func(), detail string) {
-	ui.Column(c).Height(50).Justify(ui.Center).Padding(0, 10).Gap(3).Children(func() {
+	ui.Column(c).MinHeight(50).Justify(ui.Center).Padding(6, 10).Gap(3).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).MinWidth(0).Children(title)
-		ui.Text(c, detail).FontSize(textSmall).TextColor(rowSub(c, onAccent)).SingleLine()
+		ui.Text(c, detail).FontSize(textSmall(c)).TextColor(rowSub(c, onAccent)).SingleLine()
 	})
 }
 

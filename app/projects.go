@@ -154,7 +154,7 @@ func (a *app) skillLead(c *ui.Context, sk core.Skill) func() {
 				}
 			}).OnClick(func() { a.show(sk.Path) })
 			if sk.Description != "" {
-				ui.Text(c, sk.Description).FontSize(textSmall).TextColor(p.text2).SingleLine()
+				ui.Text(c, sk.Description).FontSize(textSmall(c)).TextColor(p.text2).SingleLine()
 			}
 		})
 	}
@@ -221,13 +221,13 @@ func (a *app) addSkillsView(c *ui.Context) {
 	}
 	ui.Modal(c, &d.open, func() {
 		ui.Column(c).Width(500).Gap(14).Children(func() {
-			ui.Text(c, "Add Skills to "+placeName(d.scope)).FontSize(15).FontWeight(700)
+			ui.Text(c, "Add Skills to "+placeName(d.scope)).FontSize(textHeading(c)).FontWeight(700)
 			field, _ := searchField(c, &d.query, "Search", nil)
 			field.AutoFocus()
 			ui.Scroll(c).Height(300).Radius(10).Background(pal.card).Border(1, pal.separator).Children(func() {
 				ui.Column(c).Padding(4, 0).Children(func() {
 					if len(rows) == 0 {
-						ui.Text(c, "No skills to add").FontSize(textSmall).TextColor(pal.text2).Padding(24).TextAlign(ui.Center)
+						ui.Text(c, "No skills to add").FontSize(textSmall(c)).TextColor(pal.text2).Padding(24).TextAlign(ui.Center)
 					}
 					for _, sk := range rows {
 						on := d.picks[sk.Path]
@@ -240,7 +240,7 @@ func (a *app) addSkillsView(c *ui.Context) {
 								d.picks[sk.Path] = on
 							}
 							if sk.Description != "" {
-								ui.Text(c, sk.Description).FontSize(textSmall).TextColor(pal.text2).Margin(0, 0, 0, 26).MaxLines(2)
+								ui.Text(c, sk.Description).FontSize(textSmall(c)).TextColor(pal.text2).Margin(0, 0, 0, 26).MaxLines(2)
 							}
 						})
 					}
@@ -248,7 +248,7 @@ func (a *app) addSkillsView(c *ui.Context) {
 			})
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 				segmented(c, &d.mode, "Mode", "Link", "Copy").Width(130).Shrink(0)
-				ui.Text(c, modeHint(d.mode)).FontSize(textSmall).TextColor(pal.text2).Grow(1)
+				ui.Text(c, modeHint(d.mode)).FontSize(textSmall(c)).TextColor(pal.text2).Grow(1)
 			})
 			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 				if button(c, "Cancel", plain).Clicked() {

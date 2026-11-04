@@ -40,7 +40,7 @@ func (a *app) agentsView(c *ui.Context) {
 	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(4, 24, 40, 24).Gap(10).MaxWidth(760).Children(func() {
 			ui.Text(c, "Skills are placed in the skill directories of these agents. New enablements use the defaults.").
-				FontSize(textSmall).TextColor(pal.text2).Padding(0, 2)
+				FontSize(textSmall(c)).TextColor(pal.text2).Padding(0, 2)
 			group(c, "", func(g *rowGroup) {
 				for _, ag := range a.data.agents {
 					a.agentRow(c, g, ag)
@@ -62,17 +62,17 @@ func (a *app) agentRow(c *ui.Context, g *rowGroup, ag agent.Agent) {
 			ui.Row(c).Gap(8).AlignItems(ui.Baseline).Children(func() {
 				ui.Text(c, ag.Name).FontWeight(600).SingleLine()
 				if ag.Name != ag.ID {
-					ui.Text(c, ag.ID).FontSize(textSmall).TextColor(pal.text2).SingleLine()
+					ui.Text(c, ag.ID).FontSize(textSmall(c)).TextColor(pal.text2).SingleLine()
 				}
 			})
 			dir := func(label, path string) {
 				ui.Row(c).Gap(10).Children(func() {
-					ui.Text(c, label).FontSize(textSmall).TextColor(pal.text2).Width(48).Shrink(0)
+					ui.Text(c, label).FontSize(textSmall(c)).TextColor(pal.text2).Width(textSmall(c) * 4).Shrink(0)
 					if path == "" {
-						ui.Text(c, "None").FontSize(textSmall).TextColor(pal.text3)
+						ui.Text(c, "None").FontSize(textSmall(c)).TextColor(pal.text3)
 						return
 					}
-					ui.Text(c, path).FontSize(textSmall).Font("monospace").SingleLine().Selectable()
+					ui.Text(c, path).FontSize(textSmall(c)).Font("monospace").SingleLine().Selectable()
 				})
 			}
 			dir("Project", ag.Project)
@@ -86,7 +86,7 @@ func (a *app) agentRow(c *ui.Context, g *rowGroup, ag agent.Agent) {
 		on := a.toggled(control, "agents", isDefault)
 		last := isDefault && len(a.data.defaults) == 1
 		ui.Row(c).Gap(8).AlignItems(ui.Center).Shrink(0).Children(func() {
-			ui.Text(c, "Default").FontSize(textSmall).TextColor(pal.text2)
+			ui.Text(c, "Default").FontSize(textSmall(c)).TextColor(pal.text2)
 			sw := ui.Switch(c, &on).Label("Default for " + ag.Name).Disabled(last || a.working(c, "agents"))
 			if last {
 				sw.Tooltip("New enablements need at least one agent")
@@ -139,8 +139,8 @@ func (a *app) addAgentView(c *ui.Context) {
 	ui.Modal(c, &d.open, func() {
 		ui.Column(c).Width(440).Gap(16).Children(func() {
 			ui.Column(c).Gap(4).Children(func() {
-				ui.Text(c, "Add Agent").FontSize(15).FontWeight(700)
-				ui.Text(c, "An agent myskills doesn't know: where it reads skills in a project, globally, or both.").FontSize(textSmall).TextColor(pal.text2).LineHeight(1.4)
+				ui.Text(c, "Add Agent").FontSize(textHeading(c)).FontWeight(700)
+				ui.Text(c, "An agent myskills doesn't know: where it reads skills in a project, globally, or both.").FontSize(textSmall(c)).TextColor(pal.text2).LineHeight(1.4)
 			})
 			ui.Form(c, func() {
 				ui.Field(c, "ID", func() { ui.TextInput(c, &d.id).Placeholder("grok").AutoFocus() }).
@@ -151,7 +151,7 @@ func (a *app) addAgentView(c *ui.Context) {
 				ui.Field(c, "Global directory", func() { ui.TextInput(c, &d.global).Placeholder("~/.grok/skills") })
 			}).OnSubmit(a.addAgent)
 			if d.err != "" {
-				ui.Text(c, d.err).FontSize(textSmall).TextColor(pal.red).Selectable()
+				ui.Text(c, d.err).FontSize(textSmall(c)).TextColor(pal.red).Selectable()
 			}
 			ui.Row(c).Gap(8).Justify(ui.End).AlignItems(ui.Center).Children(func() {
 				if d.saving {

@@ -492,7 +492,7 @@ func (a *app) sidebar(c *ui.Context) {
 func (a *app) navItem(c *ui.Context, page string, icon *ui.SVG, label string, count int, countColor ui.Color) {
 	p := colors(c)
 	on := a.page == page
-	b := ui.ButtonBase(c.Key(page)).Height(30).Padding(0, 8).Radius(6).Gap(8).AlignItems(ui.Center).
+	b := ui.ButtonBase(c.Key(page)).MinHeight(30).Padding(4, 8).Radius(6).Gap(8).AlignItems(ui.Center).
 		Label(label).Role(ui.RoleTab).Checked(on).FocusRing(false)
 	if (b.Pressed() || b.Clicked()) && !on {
 		a.page, on = page, true
@@ -511,7 +511,7 @@ func (a *app) navItem(c *ui.Context, page string, icon *ui.SVG, label string, co
 		}
 		ui.Text(c, label).Grow(1).FontWeight(500).SingleLine()
 		if count > 0 {
-			ui.Text(c, strconv.Itoa(count)).FontSize(textCaption).FontWeight(600).FontFeatures("tnum").TextColor(countColor)
+			ui.Text(c, strconv.Itoa(count)).FontSize(textCaption(c)).FontWeight(600).FontFeatures("tnum").TextColor(countColor)
 		}
 	})
 }
@@ -537,9 +537,9 @@ func detailPane(c *ui.Context, key string, content func()) {
 func detailHeader(c *ui.Context, title, description string, meta func()) {
 	p := colors(c)
 	ui.Column(c).Gap(8).Children(func() {
-		ui.Text(c, title).FontSize(textTitle).FontWeight(700).LetterSpacing(-0.3).Selectable()
+		ui.Text(c, title).FontSize(textTitle(c)).FontWeight(700).LetterSpacing(-0.3).Selectable()
 		if meta != nil {
-			ui.Row(c).Gap(6).Wrap().AlignItems(ui.Center).FontSize(textSmall).TextColor(p.text2).Children(meta)
+			ui.Row(c).Gap(6).Wrap().AlignItems(ui.Center).FontSize(textSmall(c)).TextColor(p.text2).Children(meta)
 		}
 		if description != "" {
 			ui.Text(c, description).LineHeight(1.45).TextColor(p.text2).Margin(4, 0, 0, 0).Selectable()
@@ -549,7 +549,7 @@ func detailHeader(c *ui.Context, title, description string, meta func()) {
 
 // webLink is a link to a page in the browser, in a detail's meta line.
 func webLink(c *ui.Context, label, url string) {
-	linkButton(c, nil, label).FontSize(textSmall).Tooltip(url).Children(func() {
+	linkButton(c, nil, label).FontSize(textSmall(c)).Tooltip(url).Children(func() {
 		ui.Icon(c, iconExternal).Size(11, 11)
 	}).OnClick(func() { c.Services().OpenURL(url) })
 }
