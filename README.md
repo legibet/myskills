@@ -1,5 +1,7 @@
 # MySkills
 
+[![Listed on Awesome MyGo](https://awesomemygo.dev/badge.svg)](https://awesomemygo.dev/apps/myskills)
+
 MySkills is a command line tool and desktop app that manages agent skills in a private library and enables them per project or globally.
 
 - **Library**: Skills are stored in `~/.myskills/skills` and can be added from GitHub, any git remote, a local folder or [skills.sh](https://skills.sh).
@@ -8,6 +10,8 @@ MySkills is a command line tool and desktop app that manages agent skills in a p
 - **Agents**: Built-in agents include Universal (`.agents/skills`, read by Codex, Cursor, Gemini CLI and others), Claude Code (`.claude/skills`) and Antigravity. You can also add custom agents.
 
 ![The MySkills desktop app](docs/screenshot.png)
+
+The desktop app is built with [MyGo](https://github.com/egoist/mygo).
 
 ## Install
 
@@ -86,8 +90,6 @@ make test                  # go test -race ./...
 make lint                  # go vet, mygo vet, golangci-lint
 make release VERSION=x.y.z # tag a release; GitHub Actions builds and publishes it
 ```
-
-The desktop app (`app/`) is built with [mygo](https://github.com/egoist/mygo).
 
 ## License
 
