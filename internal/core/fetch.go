@@ -48,8 +48,9 @@ func (f *Fetched) Close() error {
 }
 
 // Fetch clones a git source (or reads a local folder) and discovers its
-// candidates (design §5), applying Spec.Subdir and Spec.Skill. A Skill filter
-// matching several candidates is ErrAmbiguous; matching none is ErrNotFound.
+// candidates (design §5), applying Spec.Subdir and Spec.Skills. A name in
+// Skills matching several candidates is ErrAmbiguous; matching none is
+// ErrNotFound.
 func (s *Service) Fetch(ctx context.Context, spec source.Spec) (*Fetched, error) {
 	f := &Fetched{Spec: spec}
 	switch spec.Kind {
@@ -59,7 +60,13 @@ func (s *Service) Fetch(ctx context.Context, spec source.Spec) (*Fetched, error)
 			return nil, err
 		}
 		f.cleanup = func() error { return os.RemoveAll(tmp) }
-		f.Root = filepath.Join(tmp, "repo")
+		// Named after the repository, the checkout's folder names a skill at
+		// its root whose SKILL.md is invalid.
+		name := source.RepoName(spec.URL)
+		if !filepath.IsLocal(name) {
+			name = "repo"
+		}
+		f.Root = filepath.Join(tmp, name)
 		if f.Commit, err = git.Clone(ctx, spec.URL, spec.Ref, f.Root); err != nil {
 			_ = f.Close()
 			return nil, err
@@ -109,7 +116,13 @@ func (s *Service) discover(f *Fetched) error {
 			return errorf(ErrNotFound, "%s has no folder %q", f.Spec.Input, f.Spec.Subdir)
 		}
 	}
-	dirs, err := skill.Discover(start)
+	maxDepth := skill.ListDepth
+	if len(f.Spec.Skills) > 0 {
+		// Named skills are looked for at any depth: skills.sh lists skills
+		// wherever they are in a repository, without their path.
+		maxDepth = 0
+	}
+	dirs, err := skill.Discover(start, maxDepth)
 	if err != nil {
 		return err
 	}
@@ -135,21 +148,28 @@ func (s *Service) discover(f *Fetched) error {
 		return errorf(ErrNotFound, "no skills found in %s", f.Spec.Input)
 	}
 
-	if want := f.Spec.Skill; want != "" {
-		var matched []Candidate
-		for _, c := range cands {
-			if strings.EqualFold(c.Name, want) || strings.EqualFold(filepath.Base(c.Dir), want) {
-				matched = append(matched, c)
+	if len(f.Spec.Skills) > 0 {
+		var picked []Candidate
+		for _, want := range f.Spec.Skills {
+			var matched []Candidate
+			for _, c := range cands {
+				if strings.EqualFold(c.Name, want) || strings.EqualFold(filepath.Base(c.Dir), want) {
+					matched = append(matched, c)
+				}
+			}
+			switch len(matched) {
+			case 0:
+				return errorf(ErrNotFound, "no skill %q in %s; it has: %s", want, f.Spec.Input, strings.Join(candidateNames(cands), ", "))
+			case 1:
+			default:
+				return errorf(ErrAmbiguous, "several skills in %s match %q: %s", f.Spec.Input, want, strings.Join(candidatePaths(matched), ", "))
+			}
+			// A skill can be named twice, by its name and its folder name.
+			if !slices.ContainsFunc(picked, func(c Candidate) bool { return c.Dir == matched[0].Dir }) {
+				picked = append(picked, matched[0])
 			}
 		}
-		switch len(matched) {
-		case 0:
-			return errorf(ErrNotFound, "no skill %q in %s; it has: %s", want, f.Spec.Input, strings.Join(candidateNames(cands), ", "))
-		case 1:
-		default:
-			return errorf(ErrAmbiguous, "several skills in %s match %q: %s", f.Spec.Input, want, strings.Join(candidatePaths(matched), ", "))
-		}
-		cands = matched
+		cands = picked
 	}
 
 	lock, err := store.LoadLock(s.paths.Lock)
@@ -310,7 +330,7 @@ func (s *Service) LinkLocal(dir string) (string, error) {
 	if hidden(name) {
 		return "", fmt.Errorf("%s can't be linked: the library skips folders whose name starts with a dot", abs)
 	}
-	found, err := skill.Discover(abs)
+	found, err := skill.Discover(abs, skill.ListDepth)
 	if err != nil {
 		return "", err
 	}

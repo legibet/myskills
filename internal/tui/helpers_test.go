@@ -228,13 +228,14 @@ func commit(sk core.Skill) string {
 }
 
 func (f *fakeService) Fetch(_ context.Context, spec source.Spec) (*core.Fetched, error) {
-	if err := f.record("Fetch %s skill=%s", spec.URL, spec.Skill); err != nil {
+	name := strings.Join(spec.Skills, ",")
+	if err := f.record("Fetch %s skill=%s", spec.URL, name); err != nil {
 		return nil, err
 	}
 	if fe, ok := f.fetched[spec.Input]; ok {
 		return fe, nil
 	}
-	return &core.Fetched{Spec: spec, Candidates: []core.Candidate{{Name: spec.Skill, Dir: "/tmp/checkout/" + spec.Skill}}}, nil
+	return &core.Fetched{Spec: spec, Candidates: []core.Candidate{{Name: name, Dir: "/tmp/checkout/" + name}}}, nil
 }
 
 func (f *fakeService) Install(fe *core.Fetched, picks []core.Candidate) []core.InstallResult {

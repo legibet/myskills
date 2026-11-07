@@ -120,7 +120,10 @@ checked rather than coerced:
   directory name.
 - `description`: non-empty string, ≤ 1024 chars.
 - Optional, typed when present: `license` (string), `compatibility` (string, 1–500),
-  `metadata` (map string→string), `allowed-tools` (string).
+  `allowed-tools` (string), `metadata` (mapping).
+- `metadata` entries are kept for display only when key and value are scalars, as written
+  (`version: 1.0` → `"1.0"`); nested and null values are skipped, not rejected. Clients keep
+  their own data there (`metadata.openclaw: {…}`), and agents load such skills.
 - Library scans report invalid skills with the reason; they never abort a scan.
 
 Content hash `v1:<hex sha256>` over entries sorted by relative path (skipping `.git`,
@@ -141,7 +144,9 @@ Copy rules (used for library installs and copy placements):
 Discovery in a fetched repo or a local folder:
 - Start dir has `SKILL.md` → the only candidate.
 - Else walk up to depth 6, skipping `.git` and `node_modules`; a dir with `SKILL.md` is a
-  candidate and is not descended. Hidden dirs are walked (`.claude/skills`, `.agents/skills`).
+  candidate and is not descended. Looking for named skills (`@skill`, `-s`, a skills.sh
+  result) walks without a depth limit: the name is known, and skills.sh lists skills at any
+  depth without their path. Hidden dirs are walked (`.claude/skills`, `.agents/skills`).
   Candidates resolving to the same real dir are deduplicated.
 
 ## 5. Adding to the library
@@ -162,8 +167,10 @@ Flags: `-s/--skill <name>` (repeatable), `--all`, `--ref <ref>`, `--link` (local
 `add` never asks for confirmation; `--all` adds the valid candidates and reports invalid ones
 as failed (exit 1).
 
-Remote fetch: `git clone --depth 1 --single-branch [--branch <ref>] <url> <tmp>`, then
-`git rev-parse HEAD`. Uses the user's git credentials; temp dirs always removed.
+Remote fetch: `git clone --depth 1 --single-branch [--branch <ref>] <url> <tmp>/<repo>`, then
+`git rev-parse HEAD`. Uses the user's git credentials; temp dirs always removed. The checkout
+folder is named after the repository (last URL path segment without `.git`), so a root
+skill whose `SKILL.md` is invalid is listed, and matched by `-s`, under the repository name.
 
 skills.sh is used for search and preview only:
 - `GET https://skills.sh/api/search?q=<q>&limit=<n>` → `{skills:[{id, source, skillId, name,
@@ -180,7 +187,10 @@ Install of a candidate:
   record — all under the mutation lock.
 - `skills/<name>` exists: same source (url + ref + path, or local path) → "already in
   library" (suggest `update`), else name conflict error. Nothing is changed.
-- `-s name` matching several candidates → ambiguity error listing their paths.
+- Names (`@skill` and each `-s`) match a candidate's frontmatter name or folder name,
+  ignoring case. A name matching none → not-found error listing the candidates; matching
+  several → ambiguity error listing their paths. A named candidate that is invalid fails
+  with its validation error.
 - Several candidates without `-s`/`--all`: TTY → picker; non-TTY → error listing them.
 
 Local folders: default copies each chosen candidate, record `{type: local, path: <candidate

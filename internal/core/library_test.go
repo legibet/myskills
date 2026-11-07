@@ -104,12 +104,12 @@ func TestFetchSkillFilter(t *testing.T) {
 	writeSkill(t, filepath.Join(dir, "other", "review"), "review", "other")
 	commitAll(t, dir, "second review")
 
-	fetch := func(skill string) (*Fetched, error) {
+	fetch := func(skills ...string) (*Fetched, error) {
 		spec, err := source.Parse(url)
 		if err != nil {
 			t.Fatal(err)
 		}
-		spec.Skill = skill
+		spec.Skills = skills
 		return e.svc.Fetch(context.Background(), spec)
 	}
 
@@ -135,6 +135,59 @@ func TestFetchSkillFilter(t *testing.T) {
 	// Installed under its name, not its source directory name.
 	if !exists(filepath.Join(e.libDir("tdd"), "SKILL.md")) {
 		t.Error("skill not installed as tdd")
+	}
+
+	// Several names, in the order given; a skill named twice is kept once.
+	f, err = fetch("tdd", "other/review", "tdd-dir")
+	wantErr(t, err, ErrNotFound, "other/review")
+	writeSkill(t, filepath.Join(dir, "solo"), "solo", "solo")
+	commitAll(t, dir, "solo")
+	f, err = fetch("solo", "tdd", "tdd-dir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	if len(f.Candidates) != 2 || f.Candidates[0].Name != "solo" || f.Candidates[1].Name != "tdd" {
+		t.Fatalf("candidates = %+v", f.Candidates)
+	}
+}
+
+func TestFetchNamedSkillAtAnyDepth(t *testing.T) {
+	e := newEnv(t)
+	deep := "cmd/app/template/shared/.agents/skills/deep"
+	_, url := e.repo("src", map[string]string{"top": "skills/top", "deep": deep})
+
+	// A listing stops at skill.ListDepth.
+	f := e.fetch(url)
+	_ = f.Close()
+	if len(f.Candidates) != 1 || f.Candidates[0].Name != "top" {
+		t.Fatalf("listing = %+v", f.Candidates)
+	}
+
+	f = e.fetchSkills(url, "deep")
+	defer func() { _ = f.Close() }()
+	if len(f.Candidates) != 1 || f.Candidates[0].RelPath != deep {
+		t.Fatalf("candidates = %+v", f.Candidates)
+	}
+}
+
+func TestFetchInvalidRootSkill(t *testing.T) {
+	e := newEnv(t)
+	dir := e.path("tool")
+	gitInit(t, dir)
+	writeFile(t, filepath.Join(dir, "SKILL.md"), "---\nname: tool\n---\n")
+	commitAll(t, dir, "init")
+
+	// Named after the repository, so a name filter finds it and the install
+	// gives the reason.
+	f := e.fetchSkills(fileURL(dir), "tool")
+	defer func() { _ = f.Close() }()
+	if len(f.Candidates) != 1 || f.Candidates[0].Name != "tool" || f.Candidates[0].Issue == "" {
+		t.Fatalf("candidates = %+v", f.Candidates)
+	}
+	res := e.svc.Install(f, f.Candidates)
+	if err := res[0].Err; err == nil || !strings.Contains(err.Error(), `missing required field "description"`) {
+		t.Fatalf("install err = %v", err)
 	}
 }
 

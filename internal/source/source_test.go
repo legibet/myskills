@@ -3,6 +3,7 @@ package source
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -48,7 +49,7 @@ func TestParseLocal(t *testing.T) {
 			continue
 		}
 		want := Spec{Kind: Local, Input: strings.TrimSpace(tt.in), Path: tt.want}
-		if got != want {
+		if !reflect.DeepEqual(got, want) {
 			t.Errorf("Parse(%q) = %+v, want %+v", tt.in, got, want)
 		}
 	}
@@ -66,10 +67,10 @@ func TestParseGit(t *testing.T) {
 		{"owner/repo/", Spec{URL: gh}},
 		{"owner/repo/skills/tdd", Spec{URL: gh, Subdir: "skills/tdd"}},
 		{"owner/repo//skills/./tdd/", Spec{URL: gh, Subdir: "skills/tdd"}},
-		{"owner/repo@tdd", Spec{URL: gh, Skill: "tdd"}},
-		{"owner/repo/skills@tdd", Spec{URL: gh, Subdir: "skills", Skill: "tdd"}},
+		{"owner/repo@tdd", Spec{URL: gh, Skills: []string{"tdd"}}},
+		{"owner/repo/skills@tdd", Spec{URL: gh, Subdir: "skills", Skills: []string{"tdd"}}},
 		{"owner/repo#v1", Spec{URL: gh, Ref: "v1"}},
-		{"owner/repo@tdd#v1.2", Spec{URL: gh, Ref: "v1.2", Skill: "tdd"}},
+		{"owner/repo@tdd#v1.2", Spec{URL: gh, Ref: "v1.2", Skills: []string{"tdd"}}},
 		{"owner/repo/packages/@scope/x", Spec{URL: gh, Subdir: "packages/@scope/x"}},
 		{"Owner.Name/repo_x-y.z", Spec{URL: "https://github.com/Owner.Name/repo_x-y.z.git"}},
 
@@ -116,7 +117,7 @@ func TestParseGit(t *testing.T) {
 		}
 		want := tt.want
 		want.Kind, want.Input = Git, tt.in
-		if got != want {
+		if !reflect.DeepEqual(got, want) {
 			t.Errorf("Parse(%q) =\n  %+v\nwant\n  %+v", tt.in, got, want)
 		}
 	}
@@ -205,6 +206,23 @@ func TestLabel(t *testing.T) {
 	for _, tt := range tests {
 		if got := Label(tt.url); got != tt.want {
 			t.Errorf("Label(%q) = %q, want %q", tt.url, got, tt.want)
+		}
+	}
+}
+
+func TestRepoName(t *testing.T) {
+	tests := []struct {
+		url, want string
+	}{
+		{"https://github.com/owner/repo.git", "repo"},
+		{"git@host.xz:repo.git", "repo"},
+		{"ssh://git@host.xz:2222/team/repo", "repo"},
+		{"file:///tmp/repo/", "repo"},
+		{"https://example.com/", ""},
+	}
+	for _, tt := range tests {
+		if got := RepoName(tt.url); got != tt.want {
+			t.Errorf("RepoName(%q) = %q, want %q", tt.url, got, tt.want)
 		}
 	}
 }

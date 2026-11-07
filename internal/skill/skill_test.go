@@ -70,6 +70,11 @@ func TestReadFileValid(t *testing.T) {
 			},
 		},
 		{"empty metadata", "---\nname: tdd\ndescription: d\nmetadata: {}\n---\n", Metadata{Name: "tdd", Description: "d"}},
+		{
+			"metadata not all strings",
+			"---\nname: tdd\ndescription: d\nmetadata:\n  version: 1.0\n  1: x\n  empty:\n  openclaw:\n    emoji: \"✍️\"\n  tags: [a]\n---\n",
+			Metadata{Name: "tdd", Description: "d", Metadata: map[string]string{"version": "1.0", "1": "x"}},
+		},
 		{"500 char compatibility", "---\nname: tdd\ndescription: d\ncompatibility: " + strings.Repeat("c", 500) + "\n---\n", Metadata{Name: "tdd", Description: "d", Compatibility: strings.Repeat("c", 500)}},
 		{"yes is a string", "---\nname: tdd\ndescription: yes\n---\n", Metadata{Name: "tdd", Description: "yes"}},
 		{"unknown fields", "---\nname: tdd\ndescription: d\nfoo: [1, 2]\nbar: 3\n---\n", Metadata{Name: "tdd", Description: "d"}},
@@ -137,9 +142,6 @@ func TestReadFileInvalid(t *testing.T) {
 		{"compatibility bool", "---\nname: tdd\n" + desc + "compatibility: false\n---\n", "compatibility must be a string, got bool"},
 		{"metadata list", "---\nname: tdd\n" + desc + "metadata: [a]\n---\n", "metadata must be a mapping, got list"},
 		{"metadata string", "---\nname: tdd\n" + desc + "metadata: x\n---\n", "metadata must be a mapping, got str"},
-		{"metadata value float", "---\nname: tdd\n" + desc + "metadata:\n  version: 1.0\n---\n", "metadata.version must be a string, got float"},
-		{"metadata value mapping", "---\nname: tdd\n" + desc + "metadata:\n  a: {b: c}\n---\n", "metadata.a must be a string, got mapping"},
-		{"metadata key int", "---\nname: tdd\n" + desc + "metadata:\n  1: x\n---\n", `metadata key "1" must be a string, got int`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

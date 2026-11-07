@@ -10,7 +10,7 @@ import (
 
 func discover(t *testing.T, root string) []string {
 	t.Helper()
-	got, err := Discover(root)
+	got, err := Discover(root, ListDepth)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,6 +62,12 @@ func TestDiscoverDepthLimit(t *testing.T) {
 	want := joinAll(root, "1/2/3/4/5/6")
 	if got := discover(t, root); !slices.Equal(got, want) {
 		t.Errorf("got %v, want %v", got, want)
+	}
+
+	// No limit.
+	got, err := Discover(root, 0)
+	if want := joinAll(root, "1/2/3/4/5/6", "a/2/3/4/5/6/7"); err != nil || !slices.Equal(got, want) {
+		t.Errorf("got %v, %v; want %v", got, err, want)
 	}
 }
 
@@ -157,10 +163,10 @@ func TestDiscoverUnreadable(t *testing.T) {
 		t.Errorf("got %v, want %v", got, want)
 	}
 	// An unreadable root is an error.
-	if _, err := Discover(locked); err == nil {
+	if _, err := Discover(locked, ListDepth); err == nil {
 		t.Error("unreadable root: no error")
 	}
-	if _, err := Discover(filepath.Join(root, "missing")); err == nil {
+	if _, err := Discover(filepath.Join(root, "missing"), ListDepth); err == nil {
 		t.Error("missing root: no error")
 	}
 }

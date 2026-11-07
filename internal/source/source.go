@@ -36,8 +36,8 @@ type Spec struct {
 	// Local sources.
 	Path string // absolute, cleaned
 
-	// Skill restricts the source to the skill with this name ("" for all).
-	Skill string
+	// Skills restricts the source to the skills with these names (nil for all).
+	Skills []string
 }
 
 var (
@@ -119,6 +119,15 @@ func Label(url string) string {
 		s = s[at+1:]
 	}
 	return strings.TrimSuffix(strings.TrimRight(s, "/"), ".git")
+}
+
+// RepoName returns the last segment of a git URL's repository path without
+// ".git": "repo" for https://github.com/owner/repo.git; "" when there is none.
+func RepoName(url string) string {
+	if _, repo := hostRepo(url); repo != "" {
+		return path.Base(repo)
+	}
+	return ""
 }
 
 // WebURL returns the browser URL of a skill directory in a GitHub or GitLab
@@ -252,12 +261,12 @@ func parseShorthand(input, s string) (Spec, error) {
 	if strings.ContainsFunc(s, unicode.IsSpace) {
 		return Spec{}, unrecognized(input)
 	}
-	var skill string
+	var skills []string
 	if base, name, ok := cutLast(s, "@"); ok && !strings.ContainsAny(name, `/\`) {
 		if name == "" {
 			return Spec{}, unrecognized(input)
 		}
-		s, skill = base, name
+		s, skills = base, []string{name}
 	}
 	segs := strings.Split(s, "/")
 	if len(segs) < 2 {
@@ -271,7 +280,7 @@ func parseShorthand(input, s string) (Spec, error) {
 	if err != nil {
 		return Spec{}, err
 	}
-	return Spec{URL: "https://github.com/" + owner + "/" + repo + ".git", Subdir: dir, Skill: skill}, nil
+	return Spec{URL: "https://github.com/" + owner + "/" + repo + ".git", Subdir: dir, Skills: skills}, nil
 }
 
 // subdir joins path segments into a clean, slash-separated relative path.

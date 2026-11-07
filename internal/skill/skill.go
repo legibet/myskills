@@ -173,19 +173,18 @@ func Parse(data []byte) (Metadata, error) {
 		if v.Kind != yaml.MappingNode {
 			return Metadata{}, fmt.Errorf("metadata must be a mapping, got %s", kind(v))
 		}
+		// Clients keep their own data here, often nested (metadata.openclaw)
+		// or unquoted (version: 1.0), and agents load such skills. Only flat
+		// entries are kept, as written, for display.
 		for i := 0; i+1 < len(v.Content); i += 2 {
-			k := v.Content[i]
-			if k.Kind != yaml.ScalarNode || k.ShortTag() != "!!str" {
-				return Metadata{}, fmt.Errorf("metadata key %q must be a string, got %s", k.Value, kind(k))
-			}
-			s, err := stringValue("metadata."+k.Value, v.Content[i+1])
-			if err != nil {
-				return Metadata{}, err
+			k, val := v.Content[i], v.Content[i+1]
+			if k.Kind != yaml.ScalarNode || val.Kind != yaml.ScalarNode || val.ShortTag() == "!!null" {
+				continue
 			}
 			if m.Metadata == nil {
 				m.Metadata = map[string]string{}
 			}
-			m.Metadata[k.Value] = s
+			m.Metadata[k.Value] = val.Value
 		}
 	}
 	return m, nil

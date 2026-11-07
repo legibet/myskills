@@ -7,17 +7,19 @@ import (
 	"slices"
 )
 
-// maxDepth is how far below the start directory Discover looks for skills.
-const maxDepth = 6
+// ListDepth is how far below the start directory a listing of a source looks
+// for skills, so that SKILL.md files deep in examples or fixtures stay out.
+const ListDepth = 6
 
 // Discover returns the absolute paths of the skill directories under root,
 // sorted (design §4).
 //
 // If root contains SKILL.md it is the only result. Otherwise directories up to
-// maxDepth below root are searched, skipping .git and node_modules; a directory
-// with SKILL.md is a result and is not descended into. Symlinked directories are
-// followed only when they resolve inside root. Results are real paths.
-func Discover(root string) ([]string, error) {
+// maxDepth below root are searched (0 means no limit), skipping .git and
+// node_modules; a directory with SKILL.md is a result and is not descended into.
+// Symlinked directories are followed only when they resolve inside root.
+// Results are real paths.
+func Discover(root string, maxDepth int) ([]string, error) {
 	abs, err := filepath.Abs(root)
 	if err != nil {
 		return nil, err
@@ -74,7 +76,7 @@ func Discover(root string) ([]string, error) {
 			visited[dir] = true
 			if hasSkillFile(dir) {
 				found = append(found, dir)
-			} else if it.depth+1 < maxDepth {
+			} else if maxDepth == 0 || it.depth+1 < maxDepth {
 				queue = append(queue, item{dir, it.depth + 1})
 			}
 		}

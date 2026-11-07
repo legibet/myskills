@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -71,19 +70,13 @@ func (a *app) add(cmd *cobra.Command, input string, o addOptions) error {
 		}
 		spec.Ref = o.ref
 	}
-	var names []string
-	for _, n := range append([]string{spec.Skill}, o.skills...) {
-		if n != "" && !slices.Contains(names, n) {
-			names = append(names, n)
+	for _, n := range o.skills {
+		if !slices.Contains(spec.Skills, n) {
+			spec.Skills = append(spec.Skills, n)
 		}
 	}
-	if o.all && len(names) > 0 {
+	if o.all && len(spec.Skills) > 0 {
 		return usageError(cmd, errors.New("--all can't be combined with -s or owner/repo@skill"))
-	}
-	// Fetch filters by one name itself; several are filtered below.
-	spec.Skill = ""
-	if len(names) == 1 {
-		spec.Skill = names[0]
 	}
 
 	svc, err := a.service()
@@ -96,7 +89,7 @@ func (a *app) add(cmd *cobra.Command, input string, o addOptions) error {
 	}
 	defer func() { _ = f.Close() }()
 
-	picks, err := a.choose(f, names, o.all)
+	picks, err := a.choose(f, o.all)
 	if err != nil || len(picks) == 0 {
 		return err
 	}
@@ -142,21 +135,14 @@ func (a *app) fetch(ctx context.Context, svc *core.Service, spec source.Spec) (*
 	return svc.Fetch(ctx, spec)
 }
 
-// choose returns the candidates to install: the ones named with -s, all of
-// them, the only one, or the user's picks. Nil means nothing to do.
-func (a *app) choose(f *core.Fetched, names []string, all bool) ([]core.Candidate, error) {
+// choose returns the candidates to install: the named ones (Fetch keeps only
+// those), all of them, the only one, or the user's picks. Nil means nothing
+// to do.
+func (a *app) choose(f *core.Fetched, all bool) ([]core.Candidate, error) {
 	cands := f.Candidates
 	switch {
-	case len(names) > 1:
-		var picks []core.Candidate
-		for _, name := range names {
-			c, err := findCandidate(f, name)
-			if err != nil {
-				return nil, err
-			}
-			picks = append(picks, c)
-		}
-		return picks, nil
+	case len(f.Spec.Skills) > 0:
+		return cands, nil
 	case all:
 		var picks []core.Candidate
 		for _, c := range cands {
@@ -184,32 +170,6 @@ func (a *app) choose(f *core.Fetched, names []string, all bool) ([]core.Candidat
 	}
 	b.WriteString(table("    ", rows))
 	return nil, errors.New(b.String())
-}
-
-// findCandidate finds the candidate with a name, matched like Fetch matches
-// Spec.Skill: by frontmatter name or folder name, ignoring case.
-func findCandidate(f *core.Fetched, name string) (core.Candidate, error) {
-	var matched []core.Candidate
-	for _, c := range f.Candidates {
-		if strings.EqualFold(c.Name, name) || strings.EqualFold(filepath.Base(c.Dir), name) {
-			matched = append(matched, c)
-		}
-	}
-	switch len(matched) {
-	case 0:
-		var names []string
-		for _, c := range f.Candidates {
-			names = append(names, sanitize.Line(c.Name))
-		}
-		return core.Candidate{}, fmt.Errorf("no skill %q in %s; it has: %s", name, f.Spec.Input, strings.Join(names, ", "))
-	case 1:
-		return matched[0], nil
-	}
-	var paths []string
-	for _, c := range matched {
-		paths = append(paths, cmp.Or(c.RelPath, "."))
-	}
-	return core.Candidate{}, fmt.Errorf("several skills in %s match %q: %s", f.Spec.Input, name, strings.Join(paths, ", "))
 }
 
 // candidateOrigin describes where a candidate came from: "owner/repo,

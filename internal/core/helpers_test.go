@@ -99,10 +99,18 @@ func (e *env) add(spec string) {
 
 func (e *env) fetch(spec string) *Fetched {
 	e.t.Helper()
+	return e.fetchSkills(spec)
+}
+
+// fetchSkills fetches spec restricted to the named skills, as
+// owner/repo@skill or -s does.
+func (e *env) fetchSkills(spec string, names ...string) *Fetched {
+	e.t.Helper()
 	sp, err := source.Parse(spec)
 	if err != nil {
 		e.t.Fatal(err)
 	}
+	sp.Skills = names
 	f, err := e.svc.Fetch(context.Background(), sp)
 	if err != nil {
 		e.t.Fatalf("fetch %s: %v", spec, err)
