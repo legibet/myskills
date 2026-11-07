@@ -1,0 +1,111 @@
+name: Release
+
+# make release pushes the tag. The release is created once every asset is
+# built, so latest/download links never point at a missing file.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check the app version
+        run: |
+          version="$(jq -r .version app/mygo.json)"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::app/mygo.json has version $version, the tag is $GITHUB_REF_NAME"
+            exit 1
+          fi
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: goreleaser/goreleaser-action@v7
+        with:
+          args: release --clean --skip=publish
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cli
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+          if-no-files-found: error
+
+  app:
+    name: app (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          # Signing and disk images need macOS; the others cross-compile.
+          - { name: macOS, os: macos-latest, platform: darwin/universal }
+          - { name: Linux, os: ubuntu-latest, platform: "linux/amd64,linux/arm64" }
+          - { name: Windows, os: ubuntu-latest, platform: "windows/amd64,windows/arm64" }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Install NSIS, for the Windows installers
+        if: matrix.name == 'Windows'
+        run: sudo apt-get update && sudo apt-get install -y nsis
+      - run: go tool mygo build -platform "${{ matrix.platform }}" app
+      - uses: actions/upload-artifact@v7
+        with:
+          name: app-${{ matrix.name }}
+          path: |
+            dist/app/*/*.dmg
+            dist/app/*/*.tar.gz
+            dist/app/*/*.deb
+            dist/app/*/*-setup-*.exe
+            dist/app/*/install.sh
+          if-no-files-found: error
+
+  release:
+    needs: [cli, app]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The release notes are the tag's message, and checkout may leave only
+      # a lightweight tag.
+      - name: Fetch the annotated tag
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          if [ "$(git cat-file -t "$GITHUB_REF_NAME")" != tag ]; then
+            echo "::error::$GITHUB_REF_NAME is not an annotated tag; its message is the release notes"
+            exit 1
+          fi
+      - uses: actions/download-artifact@v8
+        with:
+          name: cli
+          path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: app-*
+          merge-multiple: true
+          path: dist/app
+      # The app's files get names without its version, like the CLI's.
+      - name: Name the app's files
+        working-directory: dist
+        run: |
+          cp app/darwin-universal/*.dmg MySkills.dmg
+          for arch in amd64 arm64; do
+            cp app/linux-$arch/*.tar.gz MySkills-linux-$arch.tar.gz
+            cp app/linux-$arch/*.deb MySkills-linux-$arch.deb
+            cp app/windows-$arch/*-setup-*.exe MySkills-setup-$arch.exe
+          done
+          cp app/linux-amd64/install.sh MySkills-install.sh
+          sha256sum *.tar.gz *.zip *.dmg *.deb *.exe MySkills-install.sh > checksums.txt
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: dist
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-from-tag \
+            *.tar.gz *.zip *.dmg *.deb *.exe MySkills-install.sh checksums.txt

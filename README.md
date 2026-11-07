@@ -11,7 +11,7 @@ MySkills is a command line tool and desktop app that manages agent skills in a p
 
 ## Install
 
-Download the desktop app or the command line tool from the rolling [`latest` release](https://github.com/legibet/myskills/releases/latest).
+Download the desktop app or the command line tool from the [latest release](https://github.com/legibet/myskills/releases/latest).
 
 ### Desktop app
 
@@ -80,11 +80,11 @@ Set `MYSKILLS_HOME` to use another location.
 ## Development
 
 ```sh
-make build   # ./myskills
-make app     # the desktop app in dist/app
-make test    # go test -race ./...
-make lint    # go vet, mygo vet, golangci-lint
-make publish # replace the latest release with a build of HEAD, once pushed (goreleaser, mygo, gh, NSIS)
+make build                 # ./myskills
+make app                   # the desktop app in dist/app
+make test                  # go test -race ./...
+make lint                  # go vet, mygo vet, golangci-lint
+make release VERSION=x.y.z # tag a release; GitHub Actions builds and publishes it
 ```
 
 The desktop app (`app/`) is built with [mygo](https://github.com/egoist/mygo).

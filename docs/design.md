@@ -569,11 +569,12 @@ Feedback and work
   their controls with a spinner (sooner, it would only flicker). Quitting cancels network
   work and waits for changes in flight.
 
-Release: `make publish` also builds the app (`go tool mygo build app`, configured by
-`app/mygo.json`) and uploads it under names without its version: `MySkills.dmg` (macOS,
+Release: the Release workflow also builds the app (`go tool mygo build app`, configured by
+`app/mygo.json`, whose version is the release's) and publishes it under names without its
+version, so `releases/latest/download/<name>` links keep working: `MySkills.dmg` (macOS,
 universal, signed ad hoc: the README says how to clear the quarantine), and for Linux
 `MySkills-linux-<arch>.deb`, `MySkills-linux-<arch>.tar.gz` and `MySkills-install.sh`, which
-installs the archive for the user. For Windows it uploads `MySkills-setup-<arch>.exe`, an
+installs the archive for the user. For Windows it publishes `MySkills-setup-<arch>.exe`, an
 unsigned installer that installs the app for the user. The icon is `app/icon`: the Icon
 Composer `AppIcon.icon` on macOS, `icon.png` elsewhere.
 

@@ -10,7 +10,15 @@ MySkills is a Go CLI + TUI, and a desktop app, that manages agent skills: a priv
 - Test: `make test` (`go test -race ./...`)
 - Desktop app: `make app` (`go tool mygo build app`, into `dist/app`)
 - Lint: `make lint` (`go vet`, `go tool mygo vet ./app`, `golangci-lint`; gofumpt/goimports formatting)
-- Release: `make publish` builds HEAD with goreleaser (`.goreleaser.yaml`) and mygo (`app/mygo.json`) and replaces the assets of the rolling `latest` GitHub release; it moves the `latest` tag. The Windows installer needs NSIS.
+
+## Release
+
+Releases are semver tags `vX.Y.Z`. `.github/workflows/release.yml` builds every pushed tag with goreleaser (`.goreleaser.yaml`) and mygo (`app/mygo.json`), and publishes the GitHub release once all assets are built. To release:
+
+1. Pick the version from the commits since the last tag: while 0.x, a minor bump for new features or changed behavior, a patch bump for fixes only.
+2. Write the release notes to a temporary file: a short Markdown list of what changed for users, in their terms, not the commit log.
+3. Run `make release VERSION=x.y.z NOTES=<file>`. It refuses unless HEAD is a clean, pushed `main` whose Test run passed; it sets the version in `app/mygo.json`, commits it, tags it with the notes as the message, and pushes.
+4. The release is done when the Release run of the tag passed and `gh release view vX.Y.Z` lists its assets.
 
 ## Code
 

@@ -1,4 +1,4 @@
-# Builds the rolling `latest` release; `make publish` uploads it.
+# Builds the CLI archives for the Release workflow (.github/workflows/release.yml).
 version: 2
 project_name: myskills
 
@@ -8,7 +8,7 @@ builds:
     goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     flags: [-trimpath]
-    # The version comes from the go build stamp (the commit's pseudo-version).
+    # The version comes from the go build stamp: the release tag.
     ldflags: [-s -w]
 
 archives:
