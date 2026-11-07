@@ -546,10 +546,15 @@ func TestEnableForceKeepsReplacedCopy(t *testing.T) {
 	// while the first placement was swapped in.
 	rename = func(from, to string) error {
 		if to == first {
+			// Made before the copy is removed, so that it cannot reuse its inode.
+			unrelated := e.path("unrelated")
+			writeSkill(t, unrelated, "alpha", "unrelated")
 			if err := os.RemoveAll(second); err != nil {
 				t.Fatal(err)
 			}
-			writeSkill(t, second, "alpha", "unrelated")
+			if err := os.Rename(unrelated, second); err != nil {
+				t.Fatal(err)
+			}
 		}
 		return os.Rename(from, to)
 	}

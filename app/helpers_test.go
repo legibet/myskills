@@ -104,7 +104,7 @@ func (h *harness) settle() {
 		}
 		h.tt.Frame()
 		h.tt.Advance(50 * time.Millisecond) // the tester's clock: animations and timers move with it
-		if len(queue) == 0 && !h.a.loading && len(h.a.busy) == 0 && !h.a.updates.checking && h.a.find.due.IsZero() && !h.tt.FramePending() {
+		if len(queue) == 0 && !h.a.loading && len(h.a.busy) == 0 && !h.a.agents.add.saving && !h.a.updates.checking && h.a.find.due.IsZero() && !h.tt.FramePending() {
 			quiet++
 		} else {
 			quiet = 0
