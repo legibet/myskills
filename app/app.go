@@ -506,7 +506,7 @@ func (a *app) navItem(c *ui.Context, page string, icon *ui.SVG, label string, co
 	}
 	b.Background(b.AnimateColor("bg", bg, hoverAnimation)).Children(func() {
 		ic := ui.Icon(c, icon).Size(16, 16).Shrink(0).TextColor(p.text2)
-		if on {
+		if on && c.WindowActive() {
 			ic.TextColor(accent(c))
 		}
 		ui.Text(c, label).Grow(1).FontWeight(500).SingleLine()

@@ -1,11 +1,14 @@
 package main
 
 import (
+	"image/color"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/egoist/mygo/ui"
 
 	"github.com/legibet/myskills/internal/core"
 )
@@ -273,5 +276,43 @@ func TestRefreshModifiedCopyAsks(t *testing.T) {
 	h.confirm("Discard local changes?")
 	if _, err := os.Stat(filepath.Join(copied, "notes.md")); !os.IsNotExist(err) {
 		t.Errorf("the local change stayed: %v", err)
+	}
+}
+
+// The chosen row is in the accent while the list has the keyboard in the
+// active window, and the same gray otherwise.
+func TestListSelectionShowsFocus(t *testing.T) {
+	h := newHarness(t)
+	h.add(h.repo("pack", map[string]string{"review": "skills/review", "tdd": "skills/tdd"}))
+	h.start()
+	h.click("tdd")
+	// The row's fill, inside its left edge.
+	fill := func() color.RGBA {
+		r, ok := h.tt.Find("tdd")
+		if !ok {
+			t.Fatal("tdd is not shown")
+		}
+		return h.tt.Image().At(int(r.X)+4, int(r.Y+r.H/2)).(color.RGBA)
+	}
+	isAccent := func(c color.RGBA) bool { return max(c.R, c.G, c.B)-min(c.R, c.G, c.B) > 60 }
+	if !isAccent(fill()) {
+		t.Error("the chosen row is gray while the list has the keyboard")
+	}
+
+	h.tt.Key(ui.Cmd, ui.KeyF)
+	h.settle()
+	gray := fill()
+	if isAccent(gray) {
+		t.Error("the chosen row is in the accent while the search field has the keyboard")
+	}
+
+	h.tt.SetWindowActive(false)
+	h.settle()
+	if got := fill(); got != gray {
+		t.Errorf("the chosen row is %v in an inactive window, want the gray %v", got, gray)
+	}
+	h.click("tdd")
+	if got := fill(); got != gray {
+		t.Errorf("the chosen row of the focused list is %v in an inactive window, want the gray %v", got, gray)
 	}
 }

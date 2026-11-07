@@ -134,7 +134,7 @@ const (
 )
 
 // button is a push button: a flat rounded fill, the accent's for the
-// primary action of a pane.
+// primary action of a pane in the active window, as the stock widgets.
 func button(c *ui.Context, title string, kind buttonKind) ui.Element {
 	return iconTextButton(c, nil, title, kind)
 }
@@ -145,11 +145,11 @@ func iconTextButton(c *ui.Context, icon *ui.SVG, title string, kind buttonKind) 
 	b := ui.ButtonBase(c).MinHeight(26).Padding(3, 12).Radius(6).Gap(6).Justify(ui.Center).Shrink(0).
 		FontSize(textBody(c)).FontWeight(500).TextColor(p.text).Label(title)
 	fill := p.fill
-	switch kind {
-	case primary:
+	switch {
+	case kind == primary && c.WindowActive():
 		fill = accent(c)
 		b.TextColor(c.Theme().AccentText)
-	case destructive:
+	case kind == destructive:
 		b.TextColor(p.red)
 	}
 	switch {
@@ -383,19 +383,23 @@ func spinner(c *ui.Context, label string) ui.Element {
 }
 
 // sourceList is a list whose rows the user chooses from, as macOS draws
-// one: the row chosen in the accent color while the list has the focus,
-// else in gray. row gets whether its text is on the accent.
+// one: the row chosen in the accent color while the list has the focus in
+// the active window, else in gray, which shows the focus in place of a
+// ring. row gets whether its text is on the accent.
 func sourceList(c *ui.Context, s *ui.ListState, n int, label string, row func(i int, onAccent bool)) ui.Element {
 	p := colors(c)
-	focused := s.FocusWithin(c)
+	// The handle's query, as the list's own answers only once it is built.
+	focused := s.Handle.FocusWithin(c) && c.WindowActive()
 	t := *c.Theme()
 	if !focused {
-		t.Accent, t.AccentText = p.rowInactive, p.text
+		// The same gray in an inactive window, which would otherwise fade
+		// the accent to a darker one.
+		t.Accent, t.AccentText, t.InactiveAccent = p.rowInactive, p.text, p.rowInactive
 	}
 	t.SurfaceHover = p.hover
 	var list ui.Element
 	ui.Themed(c, &t).Grow(1).MinHeight(0).Children(func() {
-		list = ui.List(c, s, n).Grow(1).Padding(0, 10, 10, 10).Gap(1).Label(label)
+		list = ui.List(c, s, n).Grow(1).Padding(0, 10, 10, 10).Gap(1).Label(label).FocusRing(false)
 		list.Rows(func(r ui.ListRow) { row(r.Index, focused && r.Selected()) })
 	})
 	return list

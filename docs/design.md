@@ -490,10 +490,12 @@ Window and data
   detail's bar holds the actions on what it shows (icon buttons with tooltips, then the
   primary action). Groups of rows (`Enabled in`, a place's skills, the agents) are cards
   with hairline separators. Menus are native. The list's selection is the accent
-  while the list has the keyboard, gray otherwise. Light and dark follow the system, the
-  accent too; the look is defined once in `app/style.go`. Text sizes are steps from the
-  system's body size times the desktop's text scale (GNOME's and Windows's text size), and
-  controls and rows grow with their text.
+  while the list has the keyboard, gray otherwise, in place of a focus ring. In an inactive
+  window the accent of selections, the primary action and the chosen page's icon fades to
+  gray, as native apps do. Light and dark follow the system, the accent too; the look is
+  defined once in `app/style.go`. Text sizes are steps from the system's body size times
+  the desktop's text scale (GNOME's and Windows's text size), and controls and rows grow
+  with their text.
 
 Skills
 - The list: every library skill, filtered by a search field (name, description, source) and
