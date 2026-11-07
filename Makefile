@@ -18,22 +18,24 @@ lint:
 install:
 	go install .
 
-ASSETS = dist/*.tar.gz dist/*.dmg dist/*.deb dist/MySkills-install.sh dist/checksums.txt
+ASSETS = dist/*.tar.gz dist/*.zip dist/*.dmg dist/*.deb dist/*.exe dist/MySkills-install.sh dist/checksums.txt
 
 # publish replaces the rolling `latest` release with the CLI and the desktop
-# app built from HEAD. The app's files get names without its version.
+# app built from HEAD. The app's files get names without its version. The
+# Windows installer needs NSIS (brew install makensis).
 publish:
 	@test -z "$$(git status --porcelain)" || (echo "Commit your changes before publishing."; exit 1)
 	@git fetch -q origin && git merge-base --is-ancestor HEAD origin/main || (echo "Push HEAD to origin/main before publishing."; exit 1)
 	goreleaser release --snapshot --clean
-	go tool mygo build -platform darwin/universal,linux/amd64,linux/arm64 app
+	go tool mygo build -platform darwin/universal,linux/amd64,linux/arm64,windows/amd64,windows/arm64 app
 	cp dist/app/darwin-universal/*.dmg dist/MySkills.dmg
 	for arch in amd64 arm64; do \
 		cp dist/app/linux-$$arch/*.tar.gz dist/MySkills-linux-$$arch.tar.gz; \
 		cp dist/app/linux-$$arch/*.deb dist/MySkills-linux-$$arch.deb; \
+		cp dist/app/windows-$$arch/*-setup-*.exe dist/MySkills-setup-$$arch.exe; \
 	done
 	cp dist/app/linux-amd64/install.sh dist/MySkills-install.sh
-	cd dist && shasum -a 256 *.tar.gz *.dmg *.deb MySkills-install.sh > checksums.txt
+	cd dist && shasum -a 256 *.tar.gz *.zip *.dmg *.deb *.exe MySkills-install.sh > checksums.txt
 	git tag -f latest HEAD
 	git push origin refs/tags/latest --force
 	@commit="$$(git rev-parse --short HEAD)"; \

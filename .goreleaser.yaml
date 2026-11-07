@@ -5,7 +5,7 @@ project_name: myskills
 builds:
   - env:
       - CGO_ENABLED=0
-    goos: [darwin, linux]
+    goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     flags: [-trimpath]
     # The version comes from the go build stamp (the commit's pseudo-version).
@@ -13,6 +13,9 @@ builds:
 
 archives:
   - formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     # Fixed names, so releases/latest/download/<name> links keep working.
     name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
     files: [LICENSE, README.md]

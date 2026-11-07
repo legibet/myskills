@@ -33,6 +33,8 @@ To install for your user without root, download `MySkills-linux-<arch>.tar.gz` a
 sh MySkills-install.sh MySkills-linux-amd64.tar.gz
 ```
 
+**Windows**: Download and run `MySkills-setup-<arch>.exe`. The installer is not signed, so if SmartScreen blocks it, click **More info**, then **Run anyway**.
+
 ### Command line
 
 Download the archive for your platform and put `myskills` on your `PATH`:
@@ -41,6 +43,8 @@ Download the archive for your platform and put `myskills` on your `PATH`:
 curl -fsSL https://github.com/legibet/myskills/releases/latest/download/myskills_darwin_arm64.tar.gz | tar -xz myskills
 sudo mv myskills /usr/local/bin/
 ```
+
+On Windows, download `myskills_windows_<arch>.zip` and put `myskills.exe` on your `PATH`.
 
 Or install from source with Go 1.27 or later:
 
@@ -80,7 +84,7 @@ make build   # ./myskills
 make app     # the desktop app in dist/app
 make test    # go test -race ./...
 make lint    # go vet, mygo vet, golangci-lint
-make publish # replace the latest release with a build of HEAD, once pushed (goreleaser, mygo, gh)
+make publish # replace the latest release with a build of HEAD, once pushed (goreleaser, mygo, gh, NSIS)
 ```
 
 The desktop app (`app/`) is built with [mygo](https://github.com/egoist/mygo).

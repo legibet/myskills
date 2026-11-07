@@ -10,7 +10,7 @@ myskills is a Go CLI + TUI, and a desktop app, that manages agent skills: a priv
 - Test: `make test` (`go test -race ./...`)
 - Desktop app: `make app` (`go tool mygo build app`, into `dist/app`)
 - Lint: `make lint` (`go vet`, `go tool mygo vet ./app`, `golangci-lint`; gofumpt/goimports formatting)
-- Release: `make publish` builds HEAD with goreleaser (`.goreleaser.yaml`) and mygo (`app/mygo.json`) and replaces the assets of the rolling `latest` GitHub release; it moves the `latest` tag.
+- Release: `make publish` builds HEAD with goreleaser (`.goreleaser.yaml`) and mygo (`app/mygo.json`) and replaces the assets of the rolling `latest` GitHub release; it moves the `latest` tag. The Windows installer needs NSIS.
 
 ## Code
 

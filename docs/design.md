@@ -563,8 +563,9 @@ Release: `make publish` also builds the app (`go tool mygo build app`, configure
 `app/mygo.json`) and uploads it under names without its version: `MySkills.dmg` (macOS,
 universal, signed ad hoc: the README says how to clear the quarantine), and for Linux
 `MySkills-linux-<arch>.deb`, `MySkills-linux-<arch>.tar.gz` and `MySkills-install.sh`, which
-installs the archive for the user. The icon is `app/icon`: the Icon Composer `AppIcon.icon` on
-macOS, `icon.png` elsewhere.
+installs the archive for the user. For Windows it uploads `MySkills-setup-<arch>.exe`, an
+unsigned installer that installs the app for the user. The icon is `app/icon`: the Icon
+Composer `AppIcon.icon` on macOS, `icon.png` elsewhere.
 
 ## 11. Architecture
 
@@ -597,8 +598,8 @@ exclude/tracking checks are skipped with a warning).
 
 ## 12. Platforms
 - Linux, macOS: symlinks, flock.
-- Windows, best effort: core and the CLI are tested in CI; the TUI and the desktop app build
-  but are not checked there, and no Windows binaries are released.
+- Windows, best effort: core and the CLI are tested in CI; the TUI and the desktop app are
+  released but have not been run on Windows.
   - Links are directory junctions, which need no privileges, made with `mklink /J` through
     `cmd`. `cmd` expands `%VAR%` even in quotes, so paths containing `%` are refused. A
     junction cannot point at a network share, so links into a library on one fail.
