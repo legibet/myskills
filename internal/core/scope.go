@@ -341,7 +341,7 @@ func (s *Service) classify(lock *store.Lock, d *agentDir, name string) (Placemen
 	if err != nil {
 		return p, err
 	}
-	if isLink(info) {
+	if info.Mode()&fs.ModeSymlink != 0 {
 		target, err := os.Readlink(p.Path)
 		if err != nil {
 			return p, err

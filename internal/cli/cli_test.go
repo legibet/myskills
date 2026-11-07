@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -35,6 +36,7 @@ func newEnv(t *testing.T) *env {
 	home := filepath.Join(tmp, "home")
 	mkdirAll(t, home)
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("MYSKILLS_HOME", filepath.Join(home, ".myskills"))
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	t.Setenv("NO_COLOR", "1")
@@ -221,7 +223,7 @@ func TestAddSingleSkill(t *testing.T) {
 	_, url := e.repo(map[string]string{"tdd": "skills/tdd"})
 
 	r := e.ok(e.home, "add", url)
-	contains(t, r.out, "✓ added tdd ("+e.path("src")+", skills/tdd)")
+	contains(t, r.out, "✓ added tdd ("+filepath.ToSlash(e.path("src"))+", skills/tdd)")
 	if !exists(filepath.Join(e.libDir("tdd"), "SKILL.md")) {
 		t.Fatal("tdd was not installed")
 	}
@@ -348,7 +350,7 @@ func TestListAndShow(t *testing.T) {
 	contains(t, r.out, "modified")
 
 	r = e.ok(e.home, "show", "tdd")
-	contains(t, r.out, "tdd\nThe tdd skill.", "path", "~/.myskills/skills/tdd", "source", "enabled   global + 1 project", "# tdd\n\ntdd body")
+	contains(t, r.out, "tdd\nThe tdd skill.", "path", filepath.FromSlash("~/.myskills/skills/tdd"), "source", "enabled   global + 1 project", "# tdd\n\ntdd body")
 	if strings.Contains(r.out, "description:") {
 		t.Errorf("show printed the frontmatter:\n%s", r.out)
 	}
@@ -373,7 +375,7 @@ func TestUnknownSkill(t *testing.T) {
 	e.ok(e.home, "add", e.path("tdd-go"))
 	r = e.fails(proj, "enable", "tdd", "tdd-go")
 	contains(t, r.err, `✗ no skill "tdd" in the library`, "Did you mean tdd-go?")
-	contains(t, r.out, "✓ linked tdd-go → .agents/skills/tdd-go")
+	contains(t, r.out, filepath.FromSlash("✓ linked tdd-go → .agents/skills/tdd-go"))
 }
 
 func TestAmbiguousSkill(t *testing.T) {
@@ -403,8 +405,8 @@ func TestEnableDisableLink(t *testing.T) {
 
 	r := e.ok(proj, "enable", "tdd")
 	contains(t, r.out,
-		"✓ linked tdd → .agents/skills/tdd (Universal, Antigravity)",
-		"✓ linked tdd → .claude/skills/tdd (Claude Code)")
+		filepath.FromSlash("✓ linked tdd → .agents/skills/tdd (Universal, Antigravity)"),
+		filepath.FromSlash("✓ linked tdd → .claude/skills/tdd (Claude Code)"))
 	for _, p := range []string{".agents/skills/tdd", ".claude/skills/tdd"} {
 		if !isLink(t, filepath.Join(proj, p)) {
 			t.Errorf("%s is not a link", p)
@@ -412,13 +414,13 @@ func TestEnableDisableLink(t *testing.T) {
 	}
 
 	r = e.ok(proj, "enable", "tdd")
-	contains(t, r.out, "✓ tdd already linked → .agents/skills/tdd (Universal, Antigravity)")
+	contains(t, r.out, filepath.FromSlash("✓ tdd already linked → .agents/skills/tdd (Universal, Antigravity)"))
 
 	r = e.ok(proj, "status")
 	contains(t, r.out, "Project "+proj, "  tdd  link  Universal, Antigravity, Claude Code", "Global\n  nothing enabled")
 
 	r = e.ok(proj, "disable", "tdd", "-a", "claude-code")
-	contains(t, r.out, "✓ unlinked tdd from .claude/skills/tdd (Claude Code)")
+	contains(t, r.out, filepath.FromSlash("✓ unlinked tdd from .claude/skills/tdd (Claude Code)"))
 	if exists(filepath.Join(proj, ".claude/skills/tdd")) || !exists(filepath.Join(proj, ".agents/skills/tdd")) {
 		t.Error("disable -a removed the wrong placements")
 	}
@@ -426,13 +428,13 @@ func TestEnableDisableLink(t *testing.T) {
 	contains(t, r.out, "tdd  link  Universal, Antigravity  partial")
 
 	r = e.ok(proj, "disable", "tdd")
-	contains(t, r.out, "✓ unlinked tdd from .agents/skills/tdd (Universal, Antigravity)")
+	contains(t, r.out, filepath.FromSlash("✓ unlinked tdd from .agents/skills/tdd (Universal, Antigravity)"))
 	r = e.ok(proj, "disable", "tdd")
 	contains(t, r.out, "! tdd is not enabled in "+proj)
 
 	// -C picks the project from another directory.
 	r = e.ok(e.home, "enable", "-C", filepath.Join(proj, ".agents"), "tdd", "-a", "universal")
-	contains(t, r.out, "✓ linked tdd → .agents/skills/tdd (Universal, Antigravity)")
+	contains(t, r.out, filepath.FromSlash("✓ linked tdd → .agents/skills/tdd (Universal, Antigravity)"))
 }
 
 func TestEnableCopyAndModified(t *testing.T) {
@@ -442,7 +444,7 @@ func TestEnableCopyAndModified(t *testing.T) {
 	proj := e.project()
 
 	r := e.ok(proj, "enable", "tdd", "--copy", "-a", "universal")
-	contains(t, r.out, "✓ copied tdd → .agents/skills/tdd (Universal, Antigravity)")
+	contains(t, r.out, filepath.FromSlash("✓ copied tdd → .agents/skills/tdd (Universal, Antigravity)"))
 	copyDir := filepath.Join(proj, ".agents/skills/tdd")
 	if isLink(t, copyDir) || !exists(filepath.Join(copyDir, "SKILL.md")) {
 		t.Fatal("not copied")
@@ -461,7 +463,7 @@ func TestEnableCopyAndModified(t *testing.T) {
 	}
 
 	r = e.ok(proj, "disable", "tdd", "--force")
-	contains(t, r.out, "✓ removed tdd from .agents/skills/tdd (Universal, Antigravity)")
+	contains(t, r.out, filepath.FromSlash("✓ removed tdd from .agents/skills/tdd (Universal, Antigravity)"))
 
 	r = e.fails(proj, "enable", "tdd", "--link", "--copy")
 	contains(t, r.err, "--link and --copy can't be used together")
@@ -480,7 +482,7 @@ func TestEnableConflict(t *testing.T) {
 		t.Error("a failed enable changed other placements")
 	}
 	r = e.ok(proj, "status")
-	contains(t, r.out, "tdd  other  .agents/skills/tdd")
+	contains(t, r.out, filepath.FromSlash("tdd  other  .agents/skills/tdd"))
 }
 
 func TestEnableScopeErrors(t *testing.T) {
@@ -497,7 +499,7 @@ func TestEnableScopeErrors(t *testing.T) {
 	contains(t, r.err, "✗ no skills given")
 
 	r = e.ok(e.home, "enable", "-g", "tdd")
-	contains(t, r.out, "✓ linked tdd → ~/.agents/skills/tdd (Universal)", "✓ linked tdd → ~/.claude/skills/tdd (Claude Code)")
+	contains(t, r.out, filepath.FromSlash("✓ linked tdd → ~/.agents/skills/tdd (Universal)"), filepath.FromSlash("✓ linked tdd → ~/.claude/skills/tdd (Claude Code)"))
 	if !isLink(t, filepath.Join(e.home, ".claude/skills/tdd")) {
 		t.Error("global link missing")
 	}
@@ -637,6 +639,9 @@ func TestRemoveConfirmInterrupted(t *testing.T) {
 }
 
 func TestOutputIsSanitized(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file names cannot contain control characters")
+	}
 	e := newEnv(t)
 	proj := e.project()
 	// An entry myskills doesn't manage, named by whoever made the project.
@@ -663,7 +668,7 @@ func TestCheckAndUpdate(t *testing.T) {
 	commitAll(t, src)
 
 	r = e.ok(proj, "check")
-	contains(t, r.out, "! tdd: update available ("+src+")", "1 update available, 1 up to date")
+	contains(t, r.out, "! tdd: update available ("+filepath.ToSlash(src)+")", "1 update available, 1 up to date")
 
 	r = e.ok(proj, "check", "--json", "tdd")
 	checks := decode[checkJSON](t, r.out).Checks
@@ -672,7 +677,7 @@ func TestCheckAndUpdate(t *testing.T) {
 	}
 
 	r = e.ok(proj, "update")
-	contains(t, r.out, "✓ updated tdd (", "✓ refreshed tdd → .agents/skills/tdd (Universal, Antigravity)")
+	contains(t, r.out, "✓ updated tdd (", filepath.FromSlash("✓ refreshed tdd → .agents/skills/tdd (Universal, Antigravity)"))
 	body, err := os.ReadFile(filepath.Join(proj, ".agents/skills/tdd/SKILL.md"))
 	if err != nil || !strings.Contains(string(body), "new body") {
 		t.Errorf("copy not refreshed: %s %v", body, err)
@@ -702,12 +707,12 @@ func TestUpdateSkipsModifiedCopy(t *testing.T) {
 	commitAll(t, src)
 
 	r := e.fails(proj, "update")
-	contains(t, r.out, "✓ updated tdd", "! .agents/skills/tdd: modified locally, so not refreshed", "Use --force")
+	contains(t, r.out, "✓ updated tdd", filepath.FromSlash("! .agents/skills/tdd: modified locally, so not refreshed"), "Use --force")
 	if strings.Contains(r.out, "already copied") {
 		t.Errorf("skipped copy reported as fine:\n%s", r.out)
 	}
 	r = e.ok(proj, "update", "--force")
-	contains(t, r.out, "✓ refreshed tdd → .agents/skills/tdd (Universal, Antigravity)")
+	contains(t, r.out, filepath.FromSlash("✓ refreshed tdd → .agents/skills/tdd (Universal, Antigravity)"))
 }
 
 // cancelWriter cancels a context once text is written, like a Ctrl-C right
@@ -770,6 +775,9 @@ func TestUpdateInterrupted(t *testing.T) {
 }
 
 func TestPathOnTerminalIsSanitized(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file names cannot contain control characters")
+	}
 	e := newEnv(t)
 	lib := filepath.Join(e.home, "my\x1b]0;pwned\x07skills")
 	t.Setenv("MYSKILLS_HOME", lib)
@@ -805,7 +813,7 @@ func TestProgressIsSanitized(t *testing.T) {
 func TestAgents(t *testing.T) {
 	e := newEnv(t)
 	r := e.ok(e.home, "agents")
-	contains(t, r.out, "ID", "PROJECT DIR", "✓  universal    Universal    .agents/skills", "~/.claude/skills", "antigravity")
+	contains(t, r.out, "ID", "PROJECT DIR", "✓  universal    Universal    .agents/skills", filepath.FromSlash("~/.claude/skills"), "antigravity")
 
 	piDir := filepath.Join(e.home, ".pi", "skills")
 	r = e.ok(e.home, "agents", "add", "pi", "--name", "Pi", "--global", piDir)
@@ -816,15 +824,15 @@ func TestAgents(t *testing.T) {
 	r = e.ok(e.home, "agents", "use", "universal,pi")
 	contains(t, r.out, "✓ default agents: Universal, Pi")
 	r = e.ok(e.home, "agents")
-	contains(t, r.out, "✓  pi", "Pi", "—", "~/.pi/skills")
+	contains(t, r.out, "✓  pi", "Pi", "—", filepath.FromSlash("~/.pi/skills"))
 
 	_, url := e.repo(map[string]string{"tdd": "tdd"})
 	e.ok(e.home, "add", url)
 	r = e.ok(e.home, "enable", "-g", "tdd")
-	contains(t, r.out, "✓ linked tdd → ~/.pi/skills/tdd (Pi)")
+	contains(t, r.out, filepath.FromSlash("✓ linked tdd → ~/.pi/skills/tdd (Pi)"))
 
 	r = e.ok(e.home, "agents", "remove", "pi")
-	contains(t, r.out, "✓ unlinked ~/.pi/skills/tdd", "✓ removed agent pi")
+	contains(t, r.out, filepath.FromSlash("✓ unlinked ~/.pi/skills/tdd"), "✓ removed agent pi")
 	r = e.fails(e.home, "agents", "remove", "universal")
 	contains(t, r.err, "built-in agent")
 	r = e.fails(e.home, "agents", "use", "nope")

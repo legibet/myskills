@@ -237,8 +237,10 @@ disable and copy refreshes list all of them, in agent order like status: a link 
   ```
 - After any project mutation the block is **regenerated**: for every worktree
   (`git worktree list --porcelain`), every link placement under every known agent project
-  dir, as a root-anchored path with glob metacharacters escaped. Content outside the block is
-  preserved; an empty block is removed. Failures are reported as warnings.
+  dir, as a root-anchored path with glob metacharacters escaped. A dir reached through a
+  symlinked parent (`.claude/skills` → `.agents/skills`) is listed at its target and under
+  every configured spelling. Content outside the block is preserved; an empty block is
+  removed. Failures are reported as warnings.
 
 ### Mode changes and idempotence
 - `enable <skill>` (no mode flag) when already enabled: ensure placements for missing target
@@ -595,10 +597,23 @@ exclude/tracking checks are skipped with a warning).
 
 ## 12. Platforms
 - Linux, macOS: symlinks, flock.
-- Windows: junctions for links, LockFileEx, drive/UNC local paths; names that are invalid
-  Windows filenames fail clearly. Junctions are made with `mklink /J` through `cmd`, which
-  expands `%VAR%` in paths. Cross-compiled (`GOOS=windows go build ./...`), not tested on
-  Windows yet.
+- Windows, best effort: core and the CLI are tested in CI; the TUI and the desktop app build
+  but are not checked there, and no Windows binaries are released.
+  - Links are directory junctions, which need no privileges, made with `mklink /J` through
+    `cmd`. `cmd` expands `%VAR%` even in quotes, so paths containing `%` are refused. A
+    junction cannot point at a network share, so links into a library on one fail.
+  - `godebug winsymlink=0` in go.mod: since Go 1.23 junctions report as irregular files and
+    `filepath.EvalSymlinks` does not follow them; the setting makes them symlinks again, so
+    resolution, walks and cycle checks need no Windows code. Recheck when Go drops it.
+  - LockFileEx; drive and UNC local paths.
+  - Limits, reported with the system's error: copying a skill that contains a symlink needs
+    Developer Mode; names Windows cannot have fail; a file or folder another program holds
+    open cannot be replaced or removed (a swap restores the previous entry). Windows keeps no
+    permission bits, so hashes see no executable files.
+  - Git for Windows walks into junctions: in a project whose agent dir is a junction to
+    another (`.claude` → `.agents`), git sees the shared dir's content under both paths. The
+    exclude block lists links under every configured spelling, so both stay ignored; copies
+    show twice.
 
 ## 13. Testing
 - Unit: validation (typed YAML), hash (ambiguity, exec bit), discovery, copy rules (symlink
@@ -614,4 +629,5 @@ exclude/tracking checks are skipped with a warning).
 - Desktop app: `ui.Tester` drives the window headless over the real core in a temp home
   (clicks, menus, alerts, typing), with the work the app posts to the main thread run in order;
   skills.sh against `httptest`. `go tool mygo vet ./app` checks the native UI lifetimes.
-- `go vet`, `golangci-lint run`, `go test -race ./...` on macOS and Linux.
+- `go vet`, `golangci-lint run`; GitHub Actions runs `go test -race ./...` on Linux, macOS and
+  Windows. Tests of permission bits or of names Windows cannot have skip there.

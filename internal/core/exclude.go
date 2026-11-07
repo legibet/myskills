@@ -43,20 +43,32 @@ func (s *Service) writeExclude(st *state, root string) error {
 	var patterns []string
 	for _, wt := range worktrees {
 		wtReal := realPath(wt)
-		placements, err := s.scan(st, Scope{Root: wt})
-		if err != nil {
-			return err
-		}
-		for _, p := range placements {
-			if p.Kind != KindLink && p.Kind != KindBroken {
-				continue
+		for _, d := range agentDirs(st.agents, Scope{Root: wt}) {
+			placements, err := s.scanDir(st.lock, d)
+			if err != nil {
+				return err
 			}
-			// Where the link physically is: a parent-symlinked agent dir
-			// (.claude/skills → .agents/skills) is excluded at its target.
-			entry := filepath.Join(realPath(filepath.Dir(p.Path)), p.Name)
-			rel, ok := within(wtReal, entry)
-			if ok && !strings.ContainsAny(rel, "\r\n") {
-				patterns = append(patterns, "/"+escapePattern(filepath.ToSlash(rel)))
+			for _, p := range placements {
+				if p.Kind != KindLink && p.Kind != KindBroken {
+					continue
+				}
+				// Where the link physically is, and every configured spelling
+				// of its dir: Git for Windows walks into junctions, so with
+				// .claude → .agents it sees the link under .claude too.
+				var rels []string
+				if rel, ok := within(wtReal, filepath.Join(d.real, p.Name)); ok {
+					rels = append(rels, rel)
+				}
+				for _, alias := range d.aliases {
+					if rel, ok := within(wt, filepath.Join(alias, p.Name)); ok {
+						rels = append(rels, rel)
+					}
+				}
+				for _, rel := range rels {
+					if !strings.ContainsAny(rel, "\r\n") {
+						patterns = append(patterns, "/"+escapePattern(filepath.ToSlash(rel)))
+					}
+				}
 			}
 		}
 	}

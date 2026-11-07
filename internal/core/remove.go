@@ -3,6 +3,7 @@ package core
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -94,7 +95,7 @@ func (s *Service) removeFromLibrary(libPath string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if isLink(info) {
+		if info.Mode()&fs.ModeSymlink != 0 {
 			return rel, os.Remove(p)
 		}
 	}

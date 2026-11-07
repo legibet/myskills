@@ -286,7 +286,7 @@ func TestModifiedCopyProtection(t *testing.T) {
 
 	// Nothing is removed when any copy is modified, not even the clean one.
 	_, err := e.svc.Disable(sc, "alpha", DisableOptions{})
-	wantErr(t, err, ErrModified, ".claude/skills/alpha")
+	wantErr(t, err, ErrModified, filepath.Join(".claude", "skills", "alpha"))
 	if !isRealDir(agentsCopy) || !exists(filepath.Join(claudeCopy, "local.md")) {
 		t.Fatal("disable touched the copies")
 	}
@@ -326,7 +326,7 @@ func TestEnableConflictLeavesFilesystemUntouched(t *testing.T) {
 
 	for _, mode := range []Mode{"", Copy} {
 		_, err := e.svc.Enable(sc, e.skill("alpha"), EnableOptions{Mode: mode, Force: true})
-		wantErr(t, err, ErrConflict, ".claude/skills/alpha", "not managed by myskills")
+		wantErr(t, err, ErrConflict, filepath.Join(".claude", "skills", "alpha"), "not managed by myskills")
 	}
 	// The first target would have been fine, but nothing was applied.
 	if exists(filepath.Join(sc.Root, ".agents")) {
@@ -355,7 +355,11 @@ func TestParentSymlinkedAgentDirs(t *testing.T) {
 	e := setup(t)
 	sc := e.project("proj", true)
 	mkdirAll(t, filepath.Join(sc.Root, ".agents"))
-	symlink(t, ".agents", filepath.Join(sc.Root, ".claude"))
+	// A junction on Windows, the directory link users can make there without
+	// privileges.
+	if err := symlinkDir(filepath.Join(sc.Root, ".agents"), filepath.Join(sc.Root, ".claude")); err != nil {
+		t.Fatal(err)
+	}
 	commitAll(t, sc.Root, "share .agents with Claude Code")
 
 	res := e.enable(sc, "alpha", EnableOptions{})
@@ -375,7 +379,8 @@ func TestParentSymlinkedAgentDirs(t *testing.T) {
 		!slices.Equal(dirs[0].Agents, []string{"universal", "claude-code", "antigravity"}) {
 		t.Errorf("AgentDirs = %+v, %v", dirs, err)
 	}
-	want := excludeBegin + "\n/.agents/skills/alpha\n" + excludeEnd + "\n"
+	// Excluded under .claude too: Git for Windows walks into the junction.
+	want := excludeBegin + "\n/.agents/skills/alpha\n/.claude/skills/alpha\n" + excludeEnd + "\n"
 	if got := managedBlock(exclude(t, sc.Root)); got != want {
 		t.Errorf("exclude = %q", got)
 	}
@@ -524,7 +529,7 @@ func TestEnableRechecksPlacementsBeforeReplacing(t *testing.T) {
 			defer func() { rename = os.Rename }()
 
 			res, err := e.svc.Enable(sc, e.skill("alpha"), EnableOptions{Mode: tt.mode})
-			wantErr(t, err, tt.kind, ".claude/skills/alpha", "left in place")
+			wantErr(t, err, tt.kind, filepath.Join(".claude", "skills", "alpha"), "left in place")
 			if !slices.Equal(changePaths(res.Changes), []string{first}) {
 				t.Errorf("changes = %+v", res.Changes)
 			}
@@ -561,7 +566,7 @@ func TestEnableForceKeepsReplacedCopy(t *testing.T) {
 	defer func() { rename = os.Rename }()
 
 	_, err := e.svc.Enable(sc, e.skill("alpha"), EnableOptions{Mode: Link, Force: true})
-	wantErr(t, err, ErrConflict, ".claude/skills/alpha", "left in place")
+	wantErr(t, err, ErrConflict, filepath.Join(".claude", "skills", "alpha"), "left in place")
 	if !strings.Contains(readFile(t, filepath.Join(second, "SKILL.md")), "unrelated") {
 		t.Error("the directory that replaced the copy was deleted")
 	}
@@ -583,7 +588,7 @@ func TestDisableRechecksCopiesBeforeRemoving(t *testing.T) {
 	defer func() { removeAll = os.RemoveAll }()
 
 	res, err := e.svc.Disable(sc, "alpha", DisableOptions{})
-	wantErr(t, err, ErrModified, ".claude/skills/alpha", "left in place")
+	wantErr(t, err, ErrModified, filepath.Join(".claude", "skills", "alpha"), "left in place")
 	if !slices.Equal(changePaths(res.Changes), []string{first}) {
 		t.Errorf("changes = %+v", res.Changes)
 	}
@@ -785,7 +790,7 @@ func TestRefreshCopies(t *testing.T) {
 	writeFile(t, filepath.Join(claudeCopy, "local.md"), "mine")
 
 	res, err := e.svc.RefreshCopies(sc, []string{"alpha"}, false)
-	wantErr(t, err, ErrModified, ".claude/skills/alpha")
+	wantErr(t, err, ErrModified, filepath.Join(".claude", "skills", "alpha"))
 	if len(res) != 1 || res[0].Skill != "alpha" || len(res[0].Changes) != 2 {
 		t.Fatalf("results = %+v", res)
 	}

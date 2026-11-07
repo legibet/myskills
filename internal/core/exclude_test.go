@@ -2,6 +2,7 @@ package core
 
 import (
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -43,6 +44,9 @@ func TestEscapePattern(t *testing.T) {
 // Hand-made links into the library are excluded too, with their names
 // escaped so that git matches them literally.
 func TestExcludeEscapesLinkNames(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip(`Windows file names cannot contain "*"`)
+	}
 	e := setup(t)
 	sc := e.project("proj", true)
 	dir := filepath.Join(sc.Root, ".agents", "skills")

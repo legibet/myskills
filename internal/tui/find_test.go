@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -378,6 +379,7 @@ func realCheckout(t *testing.T) (input string, f *core.Fetched) {
 	t.Helper()
 	tmp := t.TempDir()
 	t.Setenv("HOME", filepath.Join(tmp, "home"))
+	t.Setenv("USERPROFILE", filepath.Join(tmp, "home"))
 	t.Setenv("MYSKILLS_HOME", filepath.Join(tmp, "home", ".myskills"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(tmp, "gitconfig"))
@@ -398,7 +400,7 @@ func realCheckout(t *testing.T) (input string, f *core.Fetched) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	input = "file://" + repo
+	input = (&url.URL{Scheme: "file", Path: filepath.ToSlash(repo)}).String()
 	spec, err := source.Parse(input)
 	if err != nil {
 		t.Fatal(err)

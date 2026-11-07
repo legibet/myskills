@@ -16,4 +16,4 @@ myskills is a Go CLI + TUI, and a desktop app, that manages agent skills: a priv
 
 - Packages under `internal/` split by responsibility; `core` is the only domain API, and `cli`, `tui` and the desktop app `app/` are thin frontends over it.
 - `app/` uses mygo native UI (package `ui`), pinned at the version in `go.mod`: read its source in the module cache (`ui/api_gen.go`, `website/docs-demo`) rather than guessing an API. The view is immediate mode: keep state, `ui.ListState` and `ui.Handle` in the app, never `ui.Element`s; work runs in goroutines and comes back through `a.post`.
-- Tests isolate state with temp `HOME` and `MYSKILLS_HOME`, and use local git repos over `file://` instead of the network.
+- Tests isolate state with temp `HOME` (and `USERPROFILE`, which Windows reads instead) and `MYSKILLS_HOME`, and use local git repos over `file://` instead of the network. CI runs them on Linux, macOS and Windows.

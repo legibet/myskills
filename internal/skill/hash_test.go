@@ -4,6 +4,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -37,6 +38,9 @@ func goldenTree(t *testing.T) string {
 }
 
 func TestHashGolden(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows keeps no executable bit")
+	}
 	// Computed independently from the format described on Hash.
 	const want = "v1:1598e81fb07139f7a44d07784cd2266ed0f3a3ba54d9d126c7464e6c94322d0f"
 	if got := mustHash(t, goldenTree(t)); got != want {
@@ -96,11 +100,17 @@ func TestHashChanges(t *testing.T) {
 			writeFile(t, link, "SKILL.md")
 		}},
 		{"exec bit cleared", func(t *testing.T, dir string) {
+			if runtime.GOOS == "windows" {
+				t.Skip("Windows keeps no executable bit")
+			}
 			if err := os.Chmod(filepath.Join(dir, "bin", "run.sh"), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}},
 		{"exec bit set", func(t *testing.T, dir string) {
+			if runtime.GOOS == "windows" {
+				t.Skip("Windows keeps no executable bit")
+			}
 			if err := os.Chmod(filepath.Join(dir, "a-b"), 0o744); err != nil {
 				t.Fatal(err)
 			}

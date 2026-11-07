@@ -2,6 +2,10 @@ module github.com/legibet/myskills
 
 go 1.27.3
 
+// Junctions, which myskills makes for links on Windows, report as symlinks, so
+// path resolution and directory walks follow them like symlinks elsewhere.
+godebug winsymlink=0
+
 require (
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.1

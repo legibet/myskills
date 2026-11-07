@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -22,7 +23,7 @@ func (h *harness) defaults() []string {
 func TestDefaultAgents(t *testing.T) {
 	h := newHarness(t).start()
 	h.click("Agents")
-	h.want("Universal", "Claude Code", "Antigravity", ".gemini/config/skills")
+	h.want("Universal", "Claude Code", "Antigravity", filepath.FromSlash(".gemini/config/skills"))
 
 	h.click("Default for Antigravity")
 	if got := h.defaults(); !slices.Equal(got, []string{"universal", "claude-code", "antigravity"}) {

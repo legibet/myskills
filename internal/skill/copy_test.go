@@ -3,6 +3,7 @@ package skill
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -27,6 +28,9 @@ func readLink(t *testing.T, path string) string {
 
 func assertMode(t *testing.T, path string, want os.FileMode) {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		return // Windows keeps no permission bits
+	}
 	info, err := os.Lstat(path)
 	if err != nil {
 		t.Fatal(err)

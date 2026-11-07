@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -182,15 +181,6 @@ func lstat(path string) (fs.FileInfo, error) {
 		os.SameFile(info, info)
 	}
 	return info, err
-}
-
-// isLink reports whether info describes a symlink, or a junction on Windows,
-// which Go reports as an irregular file.
-func isLink(info fs.FileInfo) bool {
-	if info.Mode()&fs.ModeSymlink != 0 {
-		return true
-	}
-	return runtime.GOOS == "windows" && info.Mode()&fs.ModeIrregular != 0
 }
 
 // rename, removeAll and copySkill are os.Rename, os.RemoveAll and skill.Copy

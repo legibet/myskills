@@ -128,7 +128,7 @@ func TestValidateCustom(t *testing.T) {
 		{"global only", Agent{ID: "pi", Name: "Pi", Global: "~/.pi/agent/skills"}, ""},
 		{"project only", Agent{ID: "grok", Project: ".grok/skills"}, ""},
 		{"both", Agent{ID: "grok-2", Project: ".grok/skills", Global: "~/.grok/skills/"}, ""},
-		{"absolute global", Agent{ID: "x", Global: filepath.FromSlash("/opt/skills")}, ""},
+		{"absolute global", Agent{ID: "x", Global: t.TempDir()}, ""},
 		{"digit first", Agent{ID: "9x", Project: "skills"}, ""},
 		{"backslash project", Agent{ID: "x", Project: `.x\skills`}, ""},
 		{"dotted segment", Agent{ID: "x", Project: "./skills/..x"}, ""},

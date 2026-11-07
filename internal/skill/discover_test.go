@@ -3,6 +3,7 @@ package skill
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 )
@@ -136,6 +137,9 @@ func TestDiscoverRelativeRoot(t *testing.T) {
 }
 
 func TestDiscoverUnreadable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows keeps no permission bits")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("permissions are not enforced for root")
 	}

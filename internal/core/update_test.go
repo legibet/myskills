@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -107,7 +108,7 @@ func TestUpdateAvailableAndApply(t *testing.T) {
 	if !strings.Contains(readFile(t, filepath.Join(lib, "SKILL.md")), "alpha v2") {
 		t.Error("content not updated")
 	}
-	if info, err := os.Stat(filepath.Join(lib, "scripts", "run.sh")); err != nil || info.Mode()&0o100 == 0 {
+	if info, err := os.Stat(filepath.Join(lib, "scripts", "run.sh")); err != nil || runtime.GOOS != "windows" && info.Mode()&0o100 == 0 {
 		t.Errorf("script = %v, %v", info, err)
 	}
 	rec := e.lock().Skills["alpha"]

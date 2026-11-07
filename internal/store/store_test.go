@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -226,7 +227,7 @@ func TestLockRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o644 {
+	if info.Mode().Perm() != 0o644 && runtime.GOOS != "windows" {
 		t.Errorf("mode %v, want 0644", info.Mode().Perm())
 	}
 	assertOnlyFiles(t, dir, "lock.json")

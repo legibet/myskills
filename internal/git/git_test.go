@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -292,6 +293,9 @@ func TestWorktreesBare(t *testing.T) {
 }
 
 func TestTracked(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip(`Windows file names cannot contain "*"`)
+	}
 	setup(t)
 	repo := newRepo(t)
 	commit(t, repo, ".agents/skills/tdd/SKILL.md", "x")

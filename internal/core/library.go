@@ -118,7 +118,7 @@ func (s *Service) scanEntry(name string, lock *store.Lock) []Skill {
 		entry.Issue = err.Error()
 		return []Skill{entry}
 	}
-	if isLink(info) {
+	if info.Mode()&fs.ModeSymlink != 0 {
 		entry.Linked = true
 		entry.LinkTarget, _ = os.Readlink(entry.Dir)
 		if info, err = os.Stat(entry.Dir); err != nil {
