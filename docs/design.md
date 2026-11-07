@@ -1,4 +1,4 @@
-# myskills — design
+# MySkills — design
 
 Cross-platform Go CLI + TUI for managing agent skills (folders with `SKILL.md`).
 Linux and macOS are first-class; Windows is best effort.
@@ -101,7 +101,7 @@ Non-goals
   `libraryHash` = content of the library skill it was copied from, hashed as a copy (§4).
   They can differ (copying normalizes symlinks, the umask may drop permission bits), so each
   is compared with its own side (see §6 Scan).
-- `projects`: project roots where myskills placed something. Used for "where is this skill
+- `projects`: project roots where MySkills placed something. Used for "where is this skill
   enabled" and agent cleanup. A root is dropped only when it exists and holds no managed
   placement (an unmounted root is kept).
 - Every mutation runs under an exclusive lock on `.lock` (flock / LockFileEx): load lock.json,
@@ -248,7 +248,7 @@ disable and copy refreshes list all of them, in agent order like status: a link 
 - `--link` / `--copy` converts existing placements to that mode.
 - `--copy` on an existing unmodified copy whose library content changed → refresh.
 - Deleting a modified copy (current hash ≠ record) → `ErrModified` unless `--force`.
-- A placement path occupied by anything myskills doesn't manage → `ErrConflict` naming the
+- A placement path occupied by anything MySkills doesn't manage → `ErrConflict` naming the
   occupant (and its library path when it is a link to another library skill). A broken link
   to the same library path is repaired; one to another library path is a conflict (disable it
   by that path first). `--force` never overrides a conflict.
@@ -523,7 +523,7 @@ Projects
   searchable checklist of the library skills it doesn't have, a mode, `Enable`), and
   `Refresh Copies` while some copies are outdated and unmodified.
 - Then its skills as placement rows (the name opens it on Skills), its broken links
-  (`Remove`), and the entries not managed by myskills, listed and never touched.
+  (`Remove`), and the entries not managed by MySkills, listed and never touched.
 
 Find
 - A search field taking a skills.sh query, `owner/repo`, a git URL or a folder path, and

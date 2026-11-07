@@ -1,10 +1,10 @@
-# myskills
+# MySkills
 
-myskills is a command line tool and desktop app that manages agent skills in a private library and enables them per project or globally.
+MySkills is a command line tool and desktop app that manages agent skills in a private library and enables them per project or globally.
 
 - **Library**: Skills are stored in `~/.myskills/skills` and can be added from GitHub, any git remote, a local folder or [skills.sh](https://skills.sh).
-- **Link** (default): Linking a skill creates a personal symlink into the library. In a git project, myskills excludes the link via `.git/info/exclude`.
-- **Copy**: Copying a skill writes the skill files into the project to be committed. myskills records each copy, so it can tell when the library has changed (`outdated`) or the copy was edited (`modified`).
+- **Link** (default): Linking a skill creates a personal symlink into the library. In a git project, MySkills excludes the link via `.git/info/exclude`.
+- **Copy**: Copying a skill writes the skill files into the project to be committed. MySkills records each copy, so it can tell when the library has changed (`outdated`) or the copy was edited (`modified`).
 - **Agents**: Built-in agents include Universal (`.agents/skills`, read by Codex, Cursor, Gemini CLI and others), Claude Code (`.claude/skills`) and Antigravity. You can also add custom agents.
 
 ![The MySkills desktop app](docs/screenshot.png)

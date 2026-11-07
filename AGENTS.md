@@ -1,6 +1,6 @@
 # AGENTS.md
 
-myskills is a Go CLI + TUI, and a desktop app, that manages agent skills: a private library at `~/.myskills/skills`, from which skills are enabled per project or globally as links (personal, git-excluded) or copies (committed with the project). Linux and macOS are first-class; Windows is best effort.
+MySkills is a Go CLI + TUI, and a desktop app, that manages agent skills: a private library at `~/.myskills/skills`, from which skills are enabled per project or globally as links (personal, git-excluded) or copies (committed with the project). Linux and macOS are first-class; Windows is best effort.
 
 `docs/design.md` is the source of truth for behavior: data formats, command semantics, TUI keys, the desktop app (§10) and edge cases. Read the relevant section before changing behavior, and update it in the same change when behavior changes.
 
