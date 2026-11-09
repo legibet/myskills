@@ -2,7 +2,7 @@
   "name": "MySkills",
   "slug": "myskills",
   "identifier": "dev.legibet.myskills",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "copyright": "Copyright © 2026 legibet",
   "icon": "icon/icon.png",
   "out": "../dist/app",
