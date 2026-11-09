@@ -93,7 +93,8 @@ func Tree(ctx context.Context, dir string) (map[string]Kind, error) {
 func Checkout(ctx context.Context, dir string, paths []string) error {
 	var patterns strings.Builder
 	for _, p := range paths {
-		patterns.WriteString(pattern(p) + "\n")
+		patterns.WriteString(pattern(p))
+		patterns.WriteByte('\n')
 	}
 	_, err := run(ctx, "git sparse-checkout in "+dir, patterns.String(), "-C", dir, "sparse-checkout", "add", "--stdin")
 	return err

@@ -224,7 +224,13 @@ func TestCheckout(t *testing.T) {
 	commit(t, repo, "skills/one/big.txt", "big")
 	commit(t, repo, "skills/one-more/SKILL.md", "more")
 	commit(t, repo, "skills/"+odd+"/SKILL.md", "odd")
-	target := gitT(t, repo, "hash-object", "-w", "--stdin")
+	// A symlink to README, committed as such on every OS: its blob is the
+	// target path.
+	targetFile := filepath.Join(tempDir(t), "target")
+	if err := os.WriteFile(targetFile, []byte("README"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	target := gitT(t, repo, "hash-object", "-w", targetFile)
 	gitT(t, repo, "update-index", "--add", "--cacheinfo", "120000,"+target+",link")
 	gitT(t, repo, "commit", "-q", "-m", "link")
 
