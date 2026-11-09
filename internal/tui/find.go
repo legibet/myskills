@@ -574,7 +574,7 @@ func (a *app) addResult(res skillssh.Result, key string) tea.Cmd {
 			return outcome{err: err}
 		}
 		defer func() { _ = f.Close() }()
-		return installOutcome(svc.Install(f, f.Candidates), sanitize.Line(src))
+		return installOutcome(svc.Install(ctx, f, f.Candidates), sanitize.Line(src))
 	}, done: func(out outcome) tea.Cmd {
 		a.installed(key, out)
 		return nil
@@ -585,11 +585,11 @@ func (a *app) addResult(res skillssh.Result, key string) tea.Cmd {
 // What the candidate says about the library may be stale, so core decides
 // whether it is already installed or conflicts.
 func (a *app) installCandidate(c core.Candidate, key string) tea.Cmd {
-	f, svc := a.fd.fetched, a.svc
+	f, svc, ctx := a.fd.fetched, a.svc, a.ctx
 	from := fetchedLabel(f)
 	a.fd.installs[f]++
 	return a.start(mutation{key: key, run: func(bool) outcome {
-		return installOutcome(svc.Install(f, []core.Candidate{c}), from)
+		return installOutcome(svc.Install(ctx, f, []core.Candidate{c}), from)
 	}, done: func(out outcome) tea.Cmd {
 		if a.fd.installs[f]--; a.fd.installs[f] <= 0 {
 			delete(a.fd.installs, f)

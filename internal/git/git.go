@@ -19,8 +19,9 @@ var ErrNotRepo = errors.New("not a git repository")
 // ErrNotFound reports that git is not installed.
 var ErrNotFound = errors.New("git is not installed")
 
-// Clone shallow-clones url into dir (which must not exist) at ref, or at the
-// remote HEAD when ref is empty, and returns the checked-out commit.
+// Clone clones url at ref, or at the remote HEAD when ref is empty, into dir
+// (which must not exist) and returns the commit. It downloads the commit and
+// its file list only: nothing is checked out until Checkout asks for it.
 func Clone(ctx context.Context, url, ref, dir string) (commit string, err error) {
 	if _, statErr := os.Lstat(dir); errors.Is(statErr, fs.ErrNotExist) {
 		defer func() {
@@ -29,15 +30,90 @@ func Clone(ctx context.Context, url, ref, dir string) (commit string, err error)
 			}
 		}()
 	}
-	args := []string{"-c", "advice.detachedHead=false", "clone", "--quiet", "--depth", "1", "--single-branch"}
+	args := []string{"clone", "--quiet", "--depth", "1", "--single-branch", "--filter=blob:none", "--no-checkout"}
 	if ref != "" {
 		args = append(args, "--branch", ref)
 	}
 	args = append(args, "--", url, dir)
-	if _, err := run(ctx, "git clone "+url, args...); err != nil {
+	if _, err := run(ctx, "git clone "+url, "", args...); err != nil {
 		return "", err
 	}
-	return run(ctx, "git rev-parse HEAD in "+dir, "-C", dir, "rev-parse", "HEAD")
+	if commit, err = run(ctx, "git rev-parse HEAD in "+dir, "", "-C", dir, "rev-parse", "HEAD"); err != nil {
+		return "", err
+	}
+	// An empty sparse checkout: the index lists every file, the work tree has
+	// none, and Checkout adds to it.
+	if _, err := run(ctx, "git sparse-checkout in "+dir, "", "-C", dir, "sparse-checkout", "set", "--no-cone", "--stdin"); err != nil {
+		return "", err
+	}
+	if _, err := run(ctx, "git checkout in "+dir, "", "-C", dir, "checkout", "--quiet"); err != nil {
+		return "", err
+	}
+	return commit, nil
+}
+
+// Kind is what a path in a commit is.
+type Kind int
+
+const (
+	File Kind = iota // a file or a submodule
+	Dir
+	Link
+)
+
+// Tree returns every path in the commit cloned at dir, slash-separated from
+// the repository root.
+func Tree(ctx context.Context, dir string) (map[string]Kind, error) {
+	out, err := run(ctx, "git ls-tree in "+dir, "", "-C", dir, "ls-tree", "-r", "-t", "-z", "--full-tree", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	tree := map[string]Kind{}
+	for entry := range strings.SplitSeq(out, "\x00") {
+		// <mode> <type> <object>\t<path>
+		meta, p, ok := strings.Cut(entry, "\t")
+		if !ok {
+			continue
+		}
+		switch mode, _, _ := strings.Cut(meta, " "); mode {
+		case "040000":
+			tree[p] = Dir
+		case "120000":
+			tree[p] = Link
+		default:
+			tree[p] = File
+		}
+	}
+	return tree, nil
+}
+
+// Checkout checks out paths of the clone at dir, files or folders
+// slash-separated from the repository root ("." for all of it), downloading
+// their contents in one batch.
+func Checkout(ctx context.Context, dir string, paths []string) error {
+	var patterns strings.Builder
+	for _, p := range paths {
+		patterns.WriteString(pattern(p) + "\n")
+	}
+	_, err := run(ctx, "git sparse-checkout in "+dir, patterns.String(), "-C", dir, "sparse-checkout", "add", "--stdin")
+	return err
+}
+
+// pattern returns the sparse-checkout pattern that matches exactly p, and so
+// everything under it when it is a folder.
+func pattern(p string) string {
+	if p == "." {
+		return "/*"
+	}
+	var b strings.Builder
+	b.WriteByte('/')
+	for _, r := range p {
+		if strings.ContainsRune(`\*?[!# `, r) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 // RemoteCommit returns the commit the remote ref points to (design §7): HEAD
@@ -49,7 +125,7 @@ func RemoteCommit(ctx context.Context, url, ref string) (string, error) {
 	if ref != "" {
 		want = []string{"refs/heads/" + ref, "refs/tags/" + ref + "^{}", "refs/tags/" + ref}
 	}
-	out, err := run(ctx, "git ls-remote "+url, append([]string{"ls-remote", "--", url}, want...)...)
+	out, err := run(ctx, "git ls-remote "+url, "", append([]string{"ls-remote", "--", url}, want...)...)
 	if err != nil {
 		return "", err
 	}
@@ -145,13 +221,16 @@ func (e *runError) Error() string {
 	return e.desc + ": " + cmp.Or(message(e.stderr), fmt.Sprintf("exit status %d", e.code))
 }
 
-// run runs git with args and returns its standard output without the final
-// newline. desc names the command in errors.
-func run(ctx context.Context, desc string, args ...string) (string, error) {
+// run runs git with args and stdin and returns its standard output without
+// the final newline. desc names the command in errors.
+func run(ctx context.Context, desc, stdin string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
-	// Never prompt for credentials, and keep messages in English so they can
-	// be recognized.
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C")
+	cmd.Stdin = strings.NewReader(stdin)
+	// Never prompt for credentials, keep messages in English so they can be
+	// recognized, and fail an HTTP transfer that stalls (under 1 KB/s for 30
+	// seconds) rather than wait for it forever.
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "LC_ALL=C",
+		"GIT_HTTP_LOW_SPEED_LIMIT=1000", "GIT_HTTP_LOW_SPEED_TIME=30")
 	out, err := cmd.Output()
 	if err == nil {
 		return strings.TrimRight(string(out), "\r\n"), nil
@@ -171,7 +250,7 @@ func run(ctx context.Context, desc string, args ...string) (string, error) {
 // runIn runs a git subcommand in dir and reports ErrNotRepo when dir is not
 // inside a work tree.
 func runIn(dir string, args ...string) (string, error) {
-	out, err := run(context.Background(), "git "+args[0]+" in "+dir, append([]string{"-C", dir}, args...)...)
+	out, err := run(context.Background(), "git "+args[0]+" in "+dir, "", append([]string{"-C", dir}, args...)...)
 	if re, ok := errors.AsType[*runError](err); ok &&
 		(strings.Contains(re.stderr, "not a git repository") || strings.Contains(re.stderr, "must be run in a work tree")) {
 		return "", fmt.Errorf("%s: %w", dir, ErrNotRepo)

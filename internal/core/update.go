@@ -1,6 +1,7 @@
 package core
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -146,7 +147,8 @@ func (s *Service) CheckUpdates(ctx context.Context, skills []Skill, progress fun
 }
 
 // checkGit checks the skills at indexes idx of checks, which share one git
-// source: one ls-remote, and one clone when a recorded commit differs.
+// source: one ls-remote, and one clone of their folders when a recorded
+// commit differs.
 func checkGit(ctx context.Context, url, ref string, idx []int, checks []UpdateCheck, tempDir func() (string, error)) {
 	fail := func(indexes []int, err error) {
 		for _, i := range indexes {
@@ -177,7 +179,15 @@ func checkGit(ctx context.Context, url, ref string, idx []int, checks []UpdateCh
 		return
 	}
 	repo := filepath.Join(tmp, "repo")
-	if commit, err = git.Clone(ctx, url, ref, repo); err != nil {
+	co, commit, err := clone(ctx, url, ref, repo)
+	if err == nil {
+		paths := make([]string, len(stale))
+		for n, i := range stale {
+			paths[n] = cmp.Or(checks[i].Skill.Record.Source.Path, ".")
+		}
+		err = co.add(ctx, paths)
+	}
+	if err != nil {
 		fail(stale, err)
 		return
 	}

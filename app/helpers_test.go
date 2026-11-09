@@ -225,7 +225,7 @@ func (h *harness) add(spec string) {
 		h.t.Fatal(err)
 	}
 	defer func() { _ = f.Close() }()
-	for _, r := range h.svc.Install(f, f.Candidates) {
+	for _, r := range h.svc.Install(context.Background(), f, f.Candidates) {
 		if r.Err != nil {
 			h.t.Fatalf("install %s: %v", r.Candidate.Name, r.Err)
 		}

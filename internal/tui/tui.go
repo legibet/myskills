@@ -70,7 +70,7 @@ type service interface {
 	CheckUpdates(ctx context.Context, skills []core.Skill, progress func(done, total int)) (*core.Updates, error)
 	ApplyUpdates(u *core.Updates, paths []string, force bool) []core.UpdateResult
 	Fetch(ctx context.Context, spec source.Spec) (*core.Fetched, error)
-	Install(f *core.Fetched, picks []core.Candidate) []core.InstallResult
+	Install(ctx context.Context, f *core.Fetched, picks []core.Candidate) []core.InstallResult
 	Search(ctx context.Context, query string, limit int) ([]skillssh.Result, error)
 	SkillMarkdown(ctx context.Context, source, skillID string) (string, error)
 }

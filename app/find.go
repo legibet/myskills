@@ -484,7 +484,7 @@ func (a *app) addResult(res skillssh.Result) {
 		}
 		defer func() { _ = f.Close() }()
 		var out outcome
-		out, path = installOutcome(a.svc.Install(f, f.Candidates)[0])
+		out, path = installOutcome(a.svc.Install(a.ctx, f, f.Candidates)[0])
 		return out
 	}, then: func() { a.markAdded(key, path) }}, false)
 }
@@ -503,7 +503,7 @@ func (a *app) addCandidate(f *core.Fetched, c core.Candidate) {
 	a.start(op{key: key, fail: "Couldn't add " + c.Name, run: func(bool) outcome {
 		defer a.find.release(f)
 		var out outcome
-		out, path = installOutcome(a.svc.Install(f, []core.Candidate{c})[0])
+		out, path = installOutcome(a.svc.Install(a.ctx, f, []core.Candidate{c})[0])
 		return out
 	}, then: func() { a.markAdded(key, path) }}, false)
 }

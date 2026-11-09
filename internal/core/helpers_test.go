@@ -36,6 +36,9 @@ func newEnv(t *testing.T) *env {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, ".gitconfig"))
+	// Test sources serve partial clones, as GitHub does. Local transports
+	// drop GIT_CONFIG_* variables, so this goes in the global config.
+	writeFile(t, filepath.Join(home, ".gitconfig"), "[uploadpack]\n\tallowFilter = true\n")
 	t.Setenv("GIT_AUTHOR_NAME", "Test")
 	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
 	t.Setenv("GIT_COMMITTER_NAME", "Test")
@@ -90,7 +93,7 @@ func (e *env) add(spec string) {
 			picks = append(picks, c)
 		}
 	}
-	for _, r := range e.svc.Install(f, picks) {
+	for _, r := range e.svc.Install(context.Background(), f, picks) {
 		if r.Err != nil {
 			e.t.Fatalf("install %s: %v", r.Candidate.Name, r.Err)
 		}

@@ -93,7 +93,7 @@ func (a *app) add(cmd *cobra.Command, input string, o addOptions) error {
 	if err != nil || len(picks) == 0 {
 		return err
 	}
-	for _, r := range svc.Install(f, picks) {
+	for _, r := range svc.Install(cmd.Context(), f, picks) {
 		switch {
 		case r.Err != nil:
 			a.failErr(r.Err)

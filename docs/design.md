@@ -167,10 +167,18 @@ Flags: `-s/--skill <name>` (repeatable), `--all`, `--ref <ref>`, `--link` (local
 `add` never asks for confirmation; `--all` adds the valid candidates and reports invalid ones
 as failed (exit 1).
 
-Remote fetch: `git clone --depth 1 --single-branch [--branch <ref>] <url> <tmp>/<repo>`, then
-`git rev-parse HEAD`. Uses the user's git credentials; temp dirs always removed. The checkout
-folder is named after the repository (last URL path segment without `.git`), so a root
-skill whose `SKILL.md` is invalid is listed, and matched by `-s`, under the repository name.
+Remote fetch downloads only what it reads, so a skill in a large repository is quick to add:
+- `git clone --depth 1 --single-branch --filter=blob:none --no-checkout [--branch <ref>] <url>
+  <tmp>/<repo>` downloads the commit and its file list, then `git rev-parse HEAD`.
+- A sparse checkout (non-cone, one exact pattern per path) checks out files as needed, each
+  batch in one download: first every symlink and every `SKILL.md`, for discovery; on install,
+  the chosen skill folders. A symlink inside a checked-out path pulls in what it points to
+  elsewhere in the repository, which the copy rules (§4) dereference.
+- A server without partial clone support sends everything; the result is the same.
+- Uses the user's git credentials; an HTTP transfer slower than 1 KB/s for 30 s fails rather
+  than hangs; temp dirs always removed. The checkout folder is named after the repository
+  (last URL path segment without `.git`), so a root skill whose `SKILL.md` is invalid is
+  listed, and matched by `-s`, under the repository name.
 
 skills.sh is used for search and preview only:
 - `GET https://skills.sh/api/search?q=<q>&limit=<n>` → `{skills:[{id, source, skillId, name,
@@ -291,10 +299,11 @@ that supports the scope lacks a placement.
 
 - `check [skill…]`: git skills grouped by (url, ref). Remote commit via `git ls-remote`:
   no ref → `HEAD`; else `refs/heads/<ref>`, then `refs/tags/<ref>` (peeled `^{}` when present).
-  Same as recorded commit → up to date. Otherwise shallow-clone once per group, hash each
-  recorded `path`: equal → up to date (record the new commit); different → update available;
-  missing → removed upstream. Local skills: hash the source dir if it exists. Linked /
-  record-less skills: not updatable. Parallelism 4. `--json` supported.
+  Same as recorded commit → up to date. Otherwise clone once per group as `add` does (§5),
+  checking out only the recorded paths, and hash each: equal → up to date (record the new
+  commit); different → update available; missing → removed upstream. Local skills: hash the
+  source dir if it exists. Linked / record-less skills: not updatable. Parallelism 4. `--json`
+  supported.
 - `update [skill…]`: run check; install updates from the same clone that was checked
   (stage, then swap: rename old → `.old-<rand>`, new → dest, remove old; restore on failure).
   A skill whose record changed since the check (another process updated it) is skipped,
@@ -587,7 +596,7 @@ main.go                cli.Execute()
 internal/
   skill/   validate, hash, discover, copy tree — filesystem only, no state
   source/  source spec parsing, labels and web URLs
-  git/     clone, ls-remote, rev-parse, ls-files, worktrees
+  git/     partial clone, tree listing, sparse checkout, ls-remote, rev-parse, ls-files, worktrees
   skillssh/ skills.sh search and download client
   sanitize/ untrusted text made safe for the terminal (keeps only SGR styling)
   agent/   Agent, built-ins, custom agent validation, dir per scope
@@ -633,10 +642,11 @@ exclude/tracking checks are skipped with a warning).
 - Unit: validation (typed YAML), hash (ambiguity, exec bit), discovery, copy rules (symlink
   policy), source spec parsing, ls-remote resolution, agent resolution, exclude block
   rendering/escaping, lock/config round-trip and refusal on bad files.
-- Core integration with temp `HOME`/`MYSKILLS_HOME` and local git repos via `file://`:
-  enable/disable both modes, conversions, conflicts, modified copies, tracked-path refusal,
-  linked entries and collections, parent-symlinked agent dirs, worktree exclude regeneration,
-  update with interrupted swap, concurrent mutations (lock).
+- Core integration with temp `HOME`/`MYSKILLS_HOME` and local git repos via `file://`, served
+  as partial clones (`uploadpack.allowFilter` in the global config): enable/disable both
+  modes, conversions, conflicts, modified copies, tracked-path refusal, linked entries and
+  collections, parent-symlinked agent dirs, worktree exclude regeneration, update with
+  interrupted swap, concurrent mutations (lock), what a git source checks out.
 - skills.sh client against `httptest`.
 - CLI: in-process with temp env; output, JSON, exit codes, non-TTY errors.
 - TUI: model tests driving key messages for the main flows.

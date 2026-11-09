@@ -1,8 +1,11 @@
 package git
 
 import (
+	"cmp"
 	"context"
 	"errors"
+	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +22,11 @@ func setup(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", home)
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	// Test remotes serve partial clones, as GitHub does. Local transports
+	// drop GIT_CONFIG_* variables, so this goes in the global config.
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("[uploadpack]\n\tallowFilter = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("GIT_AUTHOR_NAME", "Test")
 	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
 	t.Setenv("GIT_COMMITTER_NAME", "Test")
@@ -169,12 +177,92 @@ func TestClone(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("Clone(%q) = %s, want %s", tt.ref, got, tt.want)
 		}
-		if _, err := os.Stat(filepath.Join(dir, tt.file)); err != nil {
-			t.Errorf("Clone(%q): %v", tt.ref, err)
+		tree, err := Tree(t.Context(), dir)
+		if err != nil || tree[tt.file] != File {
+			t.Errorf("Clone(%q): tree %v, %v; want it to list %s", tt.ref, tree, err, tt.file)
+		}
+		if got := checkedOut(t, dir); len(got) > 0 {
+			t.Errorf("Clone(%q) checked out %v", tt.ref, got)
 		}
 		if n := gitT(t, dir, "rev-list", "--count", "HEAD"); n != "1" {
 			t.Errorf("Clone(%q): %s commits, want a shallow clone", tt.ref, n)
 		}
+	}
+}
+
+// checkedOut returns the files in the work tree at dir, slash-separated.
+func checkedOut(t *testing.T, dir string) []string {
+	t.Helper()
+	var files []string
+	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.Name() == ".git" {
+			return cmp.Or(err, fs.SkipDir)
+		}
+		if !d.IsDir() {
+			rel, _ := filepath.Rel(dir, p)
+			files = append(files, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	slices.Sort(files)
+	return files
+}
+
+func TestCheckout(t *testing.T) {
+	setup(t)
+	repo := newRepo(t)
+	// Characters that sparse-checkout patterns treat specially.
+	odd := "#a [b]!c d"
+	if runtime.GOOS != "windows" {
+		odd += `*?\`
+	}
+	commit(t, repo, "README", "readme")
+	commit(t, repo, "skills/one/SKILL.md", "one")
+	commit(t, repo, "skills/one/big.txt", "big")
+	commit(t, repo, "skills/one-more/SKILL.md", "more")
+	commit(t, repo, "skills/"+odd+"/SKILL.md", "odd")
+	target := gitT(t, repo, "hash-object", "-w", "--stdin")
+	gitT(t, repo, "update-index", "--add", "--cacheinfo", "120000,"+target+",link")
+	gitT(t, repo, "commit", "-q", "-m", "link")
+
+	dir := filepath.Join(tempDir(t), "clone")
+	if _, err := Clone(t.Context(), "file://"+filepath.ToSlash(repo), "", dir); err != nil {
+		t.Fatal(err)
+	}
+	// Only the file list was downloaded.
+	if missing := strings.Count(gitT(t, dir, "rev-list", "--objects", "--missing=print", "HEAD"), "\n?"); missing != 6 {
+		t.Errorf("%d contents missing after Clone, want 6", missing)
+	}
+
+	tree, err := Tree(t.Context(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantTree := map[string]Kind{
+		"README": File, "link": Link,
+		"skills": Dir, "skills/one": Dir, "skills/one-more": Dir, "skills/" + odd: Dir,
+		"skills/one/SKILL.md": File, "skills/one/big.txt": File,
+		"skills/one-more/SKILL.md": File, "skills/" + odd + "/SKILL.md": File,
+	}
+	if !maps.Equal(tree, wantTree) {
+		t.Errorf("Tree = %v, want %v", tree, wantTree)
+	}
+
+	if err := Checkout(t.Context(), dir, []string{"skills/one", "skills/" + odd + "/SKILL.md"}); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"skills/" + odd + "/SKILL.md", "skills/one/SKILL.md", "skills/one/big.txt"}
+	if got := checkedOut(t, dir); !slices.Equal(got, want) {
+		t.Errorf("checked out %q, want %q", got, want)
+	}
+	if err := Checkout(t.Context(), dir, []string{"."}); err != nil {
+		t.Fatal(err)
+	}
+	if got := checkedOut(t, dir); len(got) != 6 {
+		t.Errorf("checked out %q after Checkout(.), want every file", got)
 	}
 }
 

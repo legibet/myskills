@@ -162,7 +162,7 @@ func TestConcurrentMutations(t *testing.T) {
 		wg.Go(func() {
 			svc, err := Open()
 			if err == nil {
-				err = svc.Install(f, []Candidate{c})[0].Err
+				err = svc.Install(t.Context(), f, []Candidate{c})[0].Err
 			}
 			errs <- err
 		})

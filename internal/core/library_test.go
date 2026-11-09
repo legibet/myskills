@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -42,7 +43,7 @@ func TestInstallFromRepoWithSeveralSkills(t *testing.T) {
 		t.Errorf("invalid candidate = %+v, want Name broken with an Issue", broken)
 	}
 
-	res := e.svc.Install(f, f.Candidates)
+	res := e.svc.Install(context.Background(), f, f.Candidates)
 	for _, r := range res {
 		switch r.Candidate.Name {
 		case "broken":
@@ -128,7 +129,7 @@ func TestFetchSkillFilter(t *testing.T) {
 	if len(f.Candidates) != 1 || f.Candidates[0].Name != "tdd" || f.Candidates[0].RelPath != "skills/tdd-dir" {
 		t.Fatalf("candidates = %+v", f.Candidates)
 	}
-	res := e.svc.Install(f, f.Candidates)
+	res := e.svc.Install(context.Background(), f, f.Candidates)
 	if res[0].Err != nil || res[0].Path != "tdd" {
 		t.Fatalf("install = %+v", res[0])
 	}
@@ -138,17 +139,17 @@ func TestFetchSkillFilter(t *testing.T) {
 	}
 
 	// Several names, in the order given; a skill named twice is kept once.
-	f, err = fetch("tdd", "other/review", "tdd-dir")
+	_, err = fetch("tdd", "other/review", "tdd-dir")
 	wantErr(t, err, ErrNotFound, "other/review")
 	writeSkill(t, filepath.Join(dir, "solo"), "solo", "solo")
 	commitAll(t, dir, "solo")
-	f, err = fetch("solo", "tdd", "tdd-dir")
+	g, err := fetch("solo", "tdd", "tdd-dir")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = f.Close() }()
-	if len(f.Candidates) != 2 || f.Candidates[0].Name != "solo" || f.Candidates[1].Name != "tdd" {
-		t.Fatalf("candidates = %+v", f.Candidates)
+	defer func() { _ = g.Close() }()
+	if len(g.Candidates) != 2 || g.Candidates[0].Name != "solo" || g.Candidates[1].Name != "tdd" {
+		t.Fatalf("candidates = %+v", g.Candidates)
 	}
 }
 
@@ -185,7 +186,7 @@ func TestFetchInvalidRootSkill(t *testing.T) {
 	if len(f.Candidates) != 1 || f.Candidates[0].Name != "tool" || f.Candidates[0].Issue == "" {
 		t.Fatalf("candidates = %+v", f.Candidates)
 	}
-	res := e.svc.Install(f, f.Candidates)
+	res := e.svc.Install(context.Background(), f, f.Candidates)
 	if err := res[0].Err; err == nil || !strings.Contains(err.Error(), `missing required field "description"`) {
 		t.Fatalf("install err = %v", err)
 	}
@@ -213,7 +214,130 @@ func TestFetchSubdir(t *testing.T) {
 
 	spec.Subdir = "missing"
 	_, err = e.svc.Fetch(context.Background(), spec)
-	wantErr(t, err, ErrNotFound, "missing")
+	wantErr(t, err, ErrNotFound, `has no folder "missing"`)
+
+	writeFile(t, filepath.Join(e.path("src"), "docs", "guide.md"), "guide")
+	commitAll(t, e.path("src"), "docs")
+	spec.Subdir = "docs"
+	_, err = e.svc.Fetch(context.Background(), spec)
+	wantErr(t, err, ErrNotFound, "no skills found")
+}
+
+func TestGitSourceChecksOutWhatItReads(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("git checks out symlinks as plain files on Windows")
+	}
+	e := newEnv(t)
+	dir, url := e.repo("src", map[string]string{"a": "skills/a", "b": "skills/b"})
+	writeFile(t, filepath.Join(dir, "skills", "a", "assets", "big.txt"), "a asset")
+	writeFile(t, filepath.Join(dir, "skills", "b", "big.txt"), "b asset")
+	writeFile(t, filepath.Join(dir, "shared", "notes.md"), "notes v1")
+	symlink(t, "../../shared", filepath.Join(dir, "skills", "a", "shared"))
+	// ".." after a symlink leaves the folder the symlink points to.
+	writeFile(t, filepath.Join(dir, "lib", "data.md"), "data")
+	writeFile(t, filepath.Join(dir, "lib", "nested", "other.md"), "other")
+	symlink(t, "../lib/nested", filepath.Join(dir, "aliases", "up"))
+	symlink(t, "../../aliases/up/../data.md", filepath.Join(dir, "skills", "a", "data.md"))
+	// A SKILL.md kept elsewhere, and the skills seen through a symlink.
+	writeFile(t, filepath.Join(dir, "docs", "c.md"), "---\nname: c\ndescription: The c skill.\n---\n")
+	symlink(t, "../../docs/c.md", filepath.Join(dir, "skills", "c", "SKILL.md"))
+	symlink(t, "../skills", filepath.Join(dir, ".claude", "skills"))
+	commitAll(t, dir, "more")
+
+	f := e.fetch(url)
+	defer func() { _ = f.Close() }()
+	var rels []string
+	for _, c := range f.Candidates {
+		rels = append(rels, c.RelPath)
+	}
+	if !slices.Equal(rels, []string{"skills/a", "skills/b", "skills/c"}) {
+		t.Fatalf("candidates = %+v", f.Candidates)
+	}
+	// Listing reads the SKILL.md files only.
+	for _, p := range []string{"skills/a/assets/big.txt", "skills/b/big.txt", "shared/notes.md"} {
+		if exists(filepath.Join(f.Root, p)) {
+			t.Errorf("%s checked out by the listing", p)
+		}
+	}
+
+	picks := []Candidate{f.Candidates[0], f.Candidates[2]}
+	for _, r := range e.svc.Install(context.Background(), f, picks) {
+		if r.Err != nil {
+			t.Fatalf("install %s: %v", r.Candidate.Name, r.Err)
+		}
+	}
+	if got := readFile(t, filepath.Join(e.libDir("a"), "assets", "big.txt")); got != "a asset" {
+		t.Errorf("a/assets/big.txt = %q", got)
+	}
+	if got := readFile(t, filepath.Join(e.libDir("a"), "shared", "notes.md")); got != "notes v1" {
+		t.Errorf("a/shared/notes.md = %q", got)
+	}
+	if got := readFile(t, filepath.Join(e.libDir("a"), "data.md")); got != "data" {
+		t.Errorf("a/data.md = %q", got)
+	}
+	if sk := e.skill("c"); sk.Issue != "" || isSymlink(filepath.Join(sk.Dir, "SKILL.md")) {
+		t.Errorf("c = %+v", sk)
+	}
+	for _, p := range []string{"skills/b/big.txt", "lib/nested/other.md"} {
+		if exists(filepath.Join(f.Root, p)) {
+			t.Errorf("installing a and c checked out %s", p)
+		}
+	}
+
+	// A folder named through a symlink.
+	spec, _ := source.Parse(url)
+	spec.Subdir = ".claude/skills"
+	g, err := e.svc.Fetch(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = g.Close() }()
+	if len(g.Candidates) != 3 || g.Candidates[0].RelPath != "skills/a" {
+		t.Errorf("candidates through the symlink = %+v", g.Candidates)
+	}
+
+	// A check reads what the skill's symlinks point to.
+	writeFile(t, filepath.Join(dir, "shared", "notes.md"), "notes v2")
+	commitAll(t, dir, "notes v2")
+	if u := e.check("a"); u.Checks[0].State != Available {
+		t.Fatalf("check = %+v", u.Checks[0])
+	} else if res := e.svc.ApplyUpdates(u, nil, false); res[0].Err != nil {
+		t.Fatal(res[0].Err)
+	}
+	if got := readFile(t, filepath.Join(e.libDir("a"), "shared", "notes.md")); got != "notes v2" {
+		t.Errorf("updated a/shared/notes.md = %q", got)
+	}
+}
+
+func TestInstallRetriesAFailedDownload(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("git checks out symlinks as plain files on Windows")
+	}
+	e := newEnv(t)
+	dir, url := e.repo("src", map[string]string{"a": "skills/a"})
+	writeFile(t, filepath.Join(dir, "shared", "notes.md"), "notes")
+	symlink(t, "../../shared", filepath.Join(dir, "skills", "a", "shared"))
+	commitAll(t, dir, "shared")
+	f := e.fetch(url)
+	defer func() { _ = f.Close() }()
+
+	// The listing downloaded the whole of a; what its symlink points to is
+	// downloaded on install, which fails while the source is gone.
+	if err := os.Rename(dir, dir+"-gone"); err != nil {
+		t.Fatal(err)
+	}
+	if res := e.svc.Install(context.Background(), f, f.Candidates); res[0].Err == nil {
+		t.Fatal("install succeeded without its source")
+	}
+	if err := os.Rename(dir+"-gone", dir); err != nil {
+		t.Fatal(err)
+	}
+	if res := e.svc.Install(context.Background(), f, f.Candidates); res[0].Err != nil {
+		t.Fatal(res[0].Err)
+	}
+	if got := readFile(t, filepath.Join(e.libDir("a"), "shared", "notes.md")); got != "notes" {
+		t.Errorf("a/shared/notes.md = %q", got)
+	}
 }
 
 func TestInstallSameSourceIsAlready(t *testing.T) {
@@ -227,7 +351,7 @@ func TestInstallSameSourceIsAlready(t *testing.T) {
 	if c := f.Candidates[0]; c.Installed != "alpha" || c.Conflict != "" {
 		t.Fatalf("candidate = %+v, want Installed alpha", c)
 	}
-	res := e.svc.Install(f, f.Candidates)
+	res := e.svc.Install(context.Background(), f, f.Candidates)
 	if r := res[0]; r.Err != nil || !r.Already || r.Path != "alpha" {
 		t.Fatalf("install = %+v, want Already", r)
 	}
@@ -248,7 +372,7 @@ func TestInstallNameConflict(t *testing.T) {
 	if c := f.Candidates[0]; c.Conflict != "alpha" || c.Installed != "" {
 		t.Fatalf("candidate = %+v, want Conflict alpha", c)
 	}
-	res := e.svc.Install(f, f.Candidates)
+	res := e.svc.Install(context.Background(), f, f.Candidates)
 	wantErr(t, res[0].Err, ErrConflict, "alpha")
 	if rec := e.lock().Skills["alpha"]; rec.Source.URL != url1 {
 		t.Errorf("record source = %s, want %s", rec.Source.URL, url1)
@@ -645,7 +769,7 @@ func TestInstallCopyFailureLeavesNothing(t *testing.T) {
 
 	f := e.fetch(dir)
 	defer func() { _ = f.Close() }()
-	res := e.svc.Install(f, f.Candidates)
+	res := e.svc.Install(context.Background(), f, f.Candidates)
 	if res[0].Err == nil || !strings.Contains(res[0].Err.Error(), "outside the source") {
 		t.Fatalf("install = %+v", res[0])
 	}

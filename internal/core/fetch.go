@@ -36,6 +36,7 @@ type Fetched struct {
 	Root       string
 	Commit     string // git sources only
 	Candidates []Candidate
+	checkout   *checkout // git sources only
 	cleanup    func() error
 }
 
@@ -50,7 +51,8 @@ func (f *Fetched) Close() error {
 // Fetch clones a git source (or reads a local folder) and discovers its
 // candidates (design §5), applying Spec.Subdir and Spec.Skills. A name in
 // Skills matching several candidates is ErrAmbiguous; matching none is
-// ErrNotFound.
+// ErrNotFound. Of a git source, only the SKILL.md files are checked out;
+// Install checks out the skills it installs.
 func (s *Service) Fetch(ctx context.Context, spec source.Spec) (*Fetched, error) {
 	f := &Fetched{Spec: spec}
 	switch spec.Kind {
@@ -67,7 +69,10 @@ func (s *Service) Fetch(ctx context.Context, spec source.Spec) (*Fetched, error)
 			name = "repo"
 		}
 		f.Root = filepath.Join(tmp, name)
-		if f.Commit, err = git.Clone(ctx, spec.URL, spec.Ref, f.Root); err != nil {
+		if f.checkout, f.Commit, err = clone(ctx, spec.URL, spec.Ref, f.Root); err == nil {
+			err = f.checkout.add(ctx, f.checkout.skillFiles())
+		}
+		if err != nil {
 			_ = f.Close()
 			return nil, err
 		}
@@ -110,10 +115,10 @@ func (s *Service) checkLocalDir(dir string) error {
 // discover fills f.Candidates.
 func (s *Service) discover(f *Fetched) error {
 	start := f.Root
-	if f.Spec.Subdir != "" {
-		start = filepath.Join(f.Root, filepath.FromSlash(f.Spec.Subdir))
-		if info, err := os.Stat(start); err != nil || !info.IsDir() {
-			return errorf(ErrNotFound, "%s has no folder %q", f.Spec.Input, f.Spec.Subdir)
+	if sub := f.Spec.Subdir; sub != "" {
+		start = filepath.Join(f.Root, filepath.FromSlash(sub))
+		if !f.isFolder(sub) {
+			return errorf(ErrNotFound, "%s has no folder %q", f.Spec.Input, sub)
 		}
 	}
 	maxDepth := skill.ListDepth
@@ -123,7 +128,8 @@ func (s *Service) discover(f *Fetched) error {
 		maxDepth = 0
 	}
 	dirs, err := skill.Discover(start, maxDepth)
-	if err != nil {
+	// A folder of a git source without SKILL.md files is not checked out.
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
 	rootReal := realPath(f.Root)
@@ -188,6 +194,17 @@ func (s *Service) discover(f *Fetched) error {
 	return nil
 }
 
+// isFolder reports whether the source has a folder at sub, slash-separated
+// from its root.
+func (f *Fetched) isFolder(sub string) bool {
+	if c := f.checkout; c != nil {
+		p, _, ok := c.resolve(sub)
+		return ok && c.tree[p] == git.Dir
+	}
+	info, err := os.Stat(filepath.Join(f.Root, filepath.FromSlash(sub)))
+	return err == nil && info.IsDir()
+}
+
 func candidateNames(cands []Candidate) []string {
 	names := make([]string, len(cands))
 	for i, c := range cands {
@@ -236,11 +253,23 @@ type InstallResult struct {
 }
 
 // Install copies the picked candidates of f into the library and records
-// their source (design §5).
-func (s *Service) Install(f *Fetched, picks []Candidate) []InstallResult {
+// their source (design §5), checking them out first from a git source.
+func (s *Service) Install(ctx context.Context, f *Fetched, picks []Candidate) []InstallResult {
 	results := make([]InstallResult, len(picks))
+	var paths []string
 	for i, c := range picks {
 		results[i].Candidate = c
+		if c.Issue == "" {
+			paths = append(paths, cmp.Or(c.RelPath, "."))
+		}
+	}
+	if f.checkout != nil {
+		if err := f.checkout.add(ctx, paths); err != nil {
+			for i := range results {
+				results[i].Err = err
+			}
+			return results
+		}
 	}
 	err := s.mutate(func(st *state) error {
 		for i := range results {

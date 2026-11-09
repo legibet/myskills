@@ -238,7 +238,7 @@ func (f *fakeService) Fetch(_ context.Context, spec source.Spec) (*core.Fetched,
 	return &core.Fetched{Spec: spec, Candidates: []core.Candidate{{Name: name, Dir: "/tmp/checkout/" + name}}}, nil
 }
 
-func (f *fakeService) Install(fe *core.Fetched, picks []core.Candidate) []core.InstallResult {
+func (f *fakeService) Install(_ context.Context, fe *core.Fetched, picks []core.Candidate) []core.InstallResult {
 	var names []string
 	for _, c := range picks {
 		names = append(names, c.Name)
