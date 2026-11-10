@@ -13,7 +13,7 @@ import (
 // must) and must not lie inside src. boundary is the root of the source the
 // skill came from: symlinks that leave src but stay inside boundary are
 // dereferenced; other escaping, absolute or broken symlinks fail the copy
-// (design §4) before anything is written. dst is removed on failure.
+// (docs/library.md) before anything is written. dst is removed on failure.
 //
 // Symlinks that resolve inside src are recreated as relative symlinks. Regular
 // files keep their permission bits; .git and .DS_Store are skipped.

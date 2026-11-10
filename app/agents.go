@@ -117,7 +117,7 @@ func (a *app) setDefault(id string, on bool) {
 	}}, false)
 }
 
-// confirmRemoveAgent asks before removing a custom agent (§8 agents remove).
+// confirmRemoveAgent asks before removing a custom agent (docs/enabling.md).
 func (a *app) confirmRemoveAgent(ag agent.Agent) {
 	msg := "Its links are removed globally and in every known project; its copies stay as unmanaged files."
 	a.ask("Remove "+ag.Name+"?", msg, "Remove", func() {

@@ -117,7 +117,7 @@ func pattern(p string) string {
 	return b.String()
 }
 
-// RemoteCommit returns the commit the remote ref points to (design §7): HEAD
+// RemoteCommit returns the commit the remote ref points to (docs/library.md): HEAD
 // when ref is empty, otherwise refs/heads/<ref>, then refs/tags/<ref> (peeled).
 func RemoteCommit(ctx context.Context, url, ref string) (string, error) {
 	// Candidates in order of preference. ls-remote patterns match any ref

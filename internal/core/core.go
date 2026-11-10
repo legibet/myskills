@@ -1,5 +1,5 @@
 // Package core is the domain service shared by every frontend: the library,
-// enablement and updates (design §5–§7). All mutations take the store's
+// enablement and updates (docs/library.md, docs/enabling.md). All mutations take the store's
 // inter-process lock; a Service is safe for concurrent use.
 package core
 

@@ -1,4 +1,4 @@
-// Command app is the myskills desktop app (design §10).
+// Command app is the myskills desktop app (docs/app.md).
 package main
 
 import (

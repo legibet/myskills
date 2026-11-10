@@ -49,7 +49,7 @@ type EnableOptions struct {
 	Force  bool     // allow deleting modified copies
 }
 
-// Enable enables a library skill in the scope (design §6). It fails with
+// Enable enables a library skill in the scope (docs/enabling.md). It fails with
 // ErrConflict when a target path is occupied by something unmanaged, and with
 // ErrModified when it would delete a modified copy without Force.
 //
@@ -109,8 +109,8 @@ type target struct {
 	path string // the directory as configured for the first chosen agent
 }
 
-// targets resolves the agent skill directories for an enablement (design §6
-// Target resolution): the agents ids, or the configured defaults when ids is
+// targets resolves the agent skill directories for an enablement
+// (docs/enabling.md): the agents ids, or the configured defaults when ids is
 // nil. Directories are deduplicated by resolved path; the first agent wins.
 func targets(st *state, sc Scope, ids []string) ([]target, error) {
 	explicit := ids != nil
@@ -272,7 +272,7 @@ func repoRoot(sc Scope) (string, []string) {
 	}
 }
 
-// checkUntracked refuses a link where git tracks files (design §6 link): a
+// checkUntracked refuses a link where git tracks files (docs/enabling.md): a
 // personal link must not replace committed content. entry is resolved.
 func checkUntracked(repo, entry string) error {
 	if repo == "" {

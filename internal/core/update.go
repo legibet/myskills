@@ -54,7 +54,7 @@ func (u *Updates) Close() error {
 // checkParallelism bounds the sources checked at once.
 const checkParallelism = 4
 
-// CheckUpdates checks the skills for upstream changes (design §7). progress,
+// CheckUpdates checks the skills for upstream changes (docs/library.md). progress,
 // if not nil, is called after each source is checked.
 //
 // Upstream content is compared after copying it with the same rules as an

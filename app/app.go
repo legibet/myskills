@@ -261,7 +261,7 @@ func (d *data) agentNames(ids []string) string {
 	return strings.Join(names, ", ")
 }
 
-// skillDir is the folder shown after a skill's name when other skills share the name (§8).
+// skillDir is the folder shown after a skill's name when other skills share the name (docs/library.md).
 func (d *data) skillDir(sk core.Skill) string {
 	if dir := path.Dir(sk.Path); dir != "." && d.dup[sk.Name] {
 		return dir

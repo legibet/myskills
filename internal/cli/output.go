@@ -33,7 +33,7 @@ var (
 func dim(s string) string  { return styleDim.Render(s) }
 func bold(s string) string { return styleBold.Render(s) }
 
-// dupDir is the dim folder shown after a skill's name when other skills share the name (§8).
+// dupDir is the dim folder shown after a skill's name when other skills share the name (docs/library.md).
 func dupDir(name, libPath string, dup map[string]bool) string {
 	if dir := path.Dir(libPath); dir != "." && dup[name] {
 		return " " + dim(dir)

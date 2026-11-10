@@ -14,7 +14,7 @@ import (
 )
 
 // checkout is a clone of a git source whose files are checked out as they
-// are needed (design §5): listing its skills reads only their SKILL.md files,
+// are needed (docs/library.md): listing its skills reads only their SKILL.md files,
 // installing or checking a skill only its folder and what its symlinks point
 // to.
 type checkout struct {
@@ -59,7 +59,7 @@ func (c *checkout) skillFiles() []string {
 
 // add checks out paths, files or folders slash-separated from the root ("."
 // for all of it), and what the symlinks among them point to elsewhere in the
-// repository, which copying a skill dereferences (§4).
+// repository, which copying a skill dereferences (the copy rules in docs/library.md).
 func (c *checkout) add(ctx context.Context, paths []string) (err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

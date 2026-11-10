@@ -433,7 +433,7 @@ func (a *app) rowState(r findRow) (state, path string) {
 			}
 		}
 		// The library keeps a skill under its name: one from another source
-		// has it already (§5 Install).
+		// has it already (docs/library.md).
 		if _, ok := a.data.skill(r.res.SkillID); ok {
 			return stateConflict, r.res.SkillID
 		}
@@ -469,7 +469,7 @@ func (a *app) add(r findRow) {
 }
 
 // addResult adds a skills.sh result through git, as `add owner/repo@skill`
-// does (§5).
+// does (docs/library.md).
 func (a *app) addResult(res skillssh.Result) {
 	key := findRow{res: &res}.key()
 	var path string
@@ -526,7 +526,7 @@ func installOutcome(r core.InstallResult) (outcome, string) {
 	return outcome{}, r.Path
 }
 
-// linkFolder adds the fetched folder to the library as a link (§5 --link).
+// linkFolder adds the fetched folder to the library as a link (docs/library.md).
 func (a *app) linkFolder(dir string) {
 	a.start(op{key: "link:" + dir, fail: "Couldn't link " + tilde(dir), run: func(bool) outcome {
 		_, err := a.svc.LinkLocal(dir)

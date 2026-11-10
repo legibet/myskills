@@ -27,7 +27,7 @@ type Metadata struct {
 	Metadata      map[string]string // "metadata"
 }
 
-// Read parses and validates dir/SKILL.md (design §4). The frontmatter name must
+// Read parses and validates dir/SKILL.md (docs/library.md). The frontmatter name must
 // equal the directory name.
 func Read(dir string) (Metadata, error) {
 	m, err := ReadFile(filepath.Join(dir, FileName))
@@ -103,7 +103,7 @@ func splitFrontmatter(s string) (front, body string, err error) {
 	return "", "", errors.New(`frontmatter is not closed by a "---" line`)
 }
 
-// Parse parses and validates the frontmatter of SKILL.md content (design §4).
+// Parse parses and validates the frontmatter of SKILL.md content (docs/library.md).
 func Parse(data []byte) (Metadata, error) {
 	if !utf8.Valid(data) {
 		return Metadata{}, errors.New("not valid UTF-8")

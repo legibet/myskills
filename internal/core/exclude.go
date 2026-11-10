@@ -11,7 +11,7 @@ import (
 	"github.com/legibet/myskills/internal/git"
 )
 
-// The managed block in .git/info/exclude (design §6 Git exclude).
+// The managed block in .git/info/exclude (docs/enabling.md).
 const (
 	excludeBegin = "# >>> myskills (managed, do not edit)"
 	excludeEnd   = "# <<< myskills"

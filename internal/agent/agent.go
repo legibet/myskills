@@ -26,7 +26,7 @@ type Agent struct {
 	GlobalEnv string `json:"-"`
 }
 
-// Builtins are the agents myskills knows without configuration (design §6).
+// Builtins are the agents myskills knows without configuration (docs/enabling.md).
 // Order matters: it is the order used for display and deduplication.
 var Builtins = []Agent{
 	{ID: "universal", Name: "Universal", Project: ".agents/skills", Global: "~/.agents/skills"},
@@ -82,7 +82,7 @@ func Find(agents []Agent, id string) (Agent, bool) {
 
 var idPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
-// ValidateCustom checks a user-defined agent (design §3): id format, no
+// ValidateCustom checks a user-defined agent (docs/storage.md): id format, no
 // collision with built-ins, at least one directory, relative project dir
 // without "..", absolute or "~/" global dir.
 func ValidateCustom(a Agent) error {

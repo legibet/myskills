@@ -12,7 +12,7 @@ import (
 const ListDepth = 6
 
 // Discover returns the absolute paths of the skill directories under root,
-// sorted (design §4).
+// sorted (docs/library.md).
 //
 // If root contains SKILL.md it is the only result. Otherwise directories up to
 // maxDepth below root are searched (0 means no limit), skipping .git and

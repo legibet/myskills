@@ -23,7 +23,7 @@ const (
 	Local
 )
 
-// Spec is a parsed source (design §5).
+// Spec is a parsed source (docs/library.md).
 type Spec struct {
 	Kind  Kind
 	Input string // as typed by the user

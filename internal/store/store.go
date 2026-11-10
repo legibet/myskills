@@ -1,5 +1,5 @@
 // Package store owns the files under ~/.myskills: paths, config.json,
-// lock.json and the inter-process mutation lock (design §3).
+// lock.json and the inter-process mutation lock (docs/storage.md).
 package store
 
 import (

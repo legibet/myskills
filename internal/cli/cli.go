@@ -1,4 +1,4 @@
-// Package cli implements the myskills command line (design §8). It parses
+// Package cli implements the myskills command line (docs/cli.md). It parses
 // arguments, calls internal/core and formats the results; all domain logic
 // lives in core.
 package cli

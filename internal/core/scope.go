@@ -38,7 +38,7 @@ func (sc Scope) String() string {
 	return tilde(sc.Root)
 }
 
-// ProjectScope resolves the project containing dir (design §6 Scope): its git
+// ProjectScope resolves the project containing dir (docs/enabling.md): its git
 // work tree root, or dir itself outside git. The home directory and the
 // filesystem root are ErrNoProject.
 func (s *Service) ProjectScope(dir string) (Scope, error) {
@@ -136,7 +136,7 @@ type Status struct {
 }
 
 // Status scans the skill directories of every known agent in the scope
-// (design §6 Scan).
+// (docs/enabling.md).
 func (s *Service) Status(sc Scope) (Status, error) {
 	st, err := s.load()
 	if err != nil {
@@ -334,7 +334,7 @@ func (s *Service) scanDir(lock *store.Lock, d *agentDir) ([]Placement, error) {
 	return placements, nil
 }
 
-// classify describes the entry name in the agent dir d (design §6 Scan).
+// classify describes the entry name in the agent dir d (docs/enabling.md).
 func (s *Service) classify(lock *store.Lock, d *agentDir, name string) (Placement, error) {
 	p := Placement{Path: filepath.Join(d.path, name), Name: name, Agents: d.agents, Kind: KindOther}
 	info, err := lstat(p.Path)

@@ -14,7 +14,7 @@ import (
 	"strings"
 )
 
-// Hash returns the content hash of dir as "v1:<hex sha256>" (design §4).
+// Hash returns the content hash of dir as "v1:<hex sha256>" (docs/library.md).
 //
 // Entries below dir (not dir itself) are hashed in lexical order of their
 // slash-separated relative path, skipping .git and .DS_Store at any depth.

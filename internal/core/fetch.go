@@ -49,7 +49,7 @@ func (f *Fetched) Close() error {
 }
 
 // Fetch clones a git source (or reads a local folder) and discovers its
-// candidates (design §5), applying Spec.Subdir and Spec.Skills. A name in
+// candidates (docs/library.md), applying Spec.Subdir and Spec.Skills. A name in
 // Skills matching several candidates at its most preferred place is
 // ErrAmbiguous; matching none is ErrNotFound. Of a git source, only the
 // SKILL.md files are checked out; Install checks out the skills it installs.
@@ -206,7 +206,7 @@ func (s *Service) discover(f *Fetched) error {
 // skills/, the universal .agents/skills, another agent's skills folder, then
 // anywhere else. A repository serving several agents keeps a copy of its
 // skill in each agent's folder, and a skill named by a skills.sh result or
-// -s takes the copy at the most preferred place (design §5).
+// -s takes the copy at the most preferred place (docs/library.md).
 func placeRank(rel string) int {
 	first, rest, _ := strings.Cut(rel, "/")
 	switch {
@@ -279,7 +279,7 @@ type InstallResult struct {
 }
 
 // Install copies the picked candidates of f into the library and records
-// their source (design §5), checking them out first from a git source.
+// their source (docs/library.md), checking them out first from a git source.
 func (s *Service) Install(ctx context.Context, f *Fetched, picks []Candidate) []InstallResult {
 	results := make([]InstallResult, len(picks))
 	var paths []string

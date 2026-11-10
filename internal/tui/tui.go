@@ -1,4 +1,4 @@
-// Package tui is the full-screen terminal interface of myskills (design §9):
+// Package tui is the full-screen terminal interface of myskills (docs/tui.md):
 // the Skills and Find views, and the picker used by `myskills add`.
 package tui
 

@@ -361,7 +361,7 @@ func (a *app) where(path string) string {
 	return strings.Join(parts, ", ")
 }
 
-// chooseProject asks for a folder, and gives fn its project (§6 Scope).
+// chooseProject asks for a folder, and gives fn its project (docs/enabling.md).
 func (a *app) chooseProject(fn func(core.Scope)) {
 	a.chooseFolder("Choose a project folder", func(dir string) {
 		sc, err := a.svc.ProjectScope(dir)
@@ -421,7 +421,7 @@ func (a *app) updateActions(c *ui.Context) {
 	toolButton(c, iconRefresh, "Check for Updates").Disabled(a.working(c, "updates")).OnClick(a.checkUpdates)
 }
 
-// checkUpdates checks every updatable skill (§7).
+// checkUpdates checks every updatable skill (docs/library.md).
 func (a *app) checkUpdates() {
 	var skills []core.Skill
 	for _, sk := range a.data.lib {
@@ -585,7 +585,7 @@ func (a *app) updateAll() {
 	}}, false)
 }
 
-// confirmRemove asks before removing a skill from the library (§8 remove).
+// confirmRemove asks before removing a skill from the library (docs/library.md).
 func (a *app) confirmRemove(sk core.Skill) {
 	affected := []string{sk.Path}
 	var body []string
