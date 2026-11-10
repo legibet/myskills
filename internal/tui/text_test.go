@@ -2,6 +2,7 @@ package tui
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -66,6 +67,39 @@ func TestThemeFollowsTerminal(t *testing.T) {
 		if tt.c.profile == colorprofile.ANSI256 {
 			if i, ok := th.selectionBg.(lipgloss.ANSIColor); !ok || i < 232 {
 				t.Errorf("256 colors: selection = %v, want a gray of the palette", th.selectionBg)
+			}
+		}
+	}
+}
+
+// H1 and H2 are in the accent color, lower headings in the terminal's text
+// color: no foreground color at all, which a terminal that does not adjust
+// contrast would otherwise show as given, e.g. black on a dark background.
+func TestMarkdownHeadingColors(t *testing.T) {
+	md := "# H1\n\n## H2\n\n### H3\n\n#### H4\n\n##### H5\n\n###### H6"
+	sgr := regexp.MustCompile("\x1b\\[([0-9;:]*)m")
+	for _, c := range []termColors{
+		newTermColors(),
+		{fg: lipgloss.Color("#c0caf5"), bg: lipgloss.Color("#1a1b26"), dark: true, profile: colorprofile.TrueColor},
+	} {
+		out := renderMarkdown(md, 60, newTheme(c))
+		for line := range strings.Lines(out) {
+			name := strings.TrimSpace(ansi.Strip(line))
+			if name == "" {
+				continue
+			}
+			var params []string
+			for _, m := range sgr.FindAllStringSubmatch(line, -1) {
+				if m[1] != "" {
+					params = append(params, strings.Split(m[1], ";")...)
+				}
+			}
+			accent := slices.Contains(params, "34")
+			fg := slices.ContainsFunc(params, func(p string) bool {
+				return p == "38" || (len(p) == 2 && (p[0] == '3' || p[0] == '9') && p[1] != '9')
+			})
+			if name <= "H2" && !accent || name > "H2" && fg {
+				t.Errorf("%v: %s rendered as %q", c.profile, name, line)
 			}
 		}
 	}

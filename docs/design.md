@@ -472,8 +472,9 @@ Behavior rules
   highlighted row, inline code) blend the foreground and background colors it reports. At
   256 colors those blends are grays of the palette; when the terminal does not report its
   colors, shows 16 colors or fewer, or `NO_COLOR` is set, faint text and reverse video take
-  their place. SKILL.md previews use the same colors: accent headings without `#` markers,
-  tinted inline code, code blocks indented and not highlighted. No Nerd Font glyphs.
+  their place. SKILL.md previews use the same colors: headings without `#` markers (H1 and
+  H2 in the accent, lower ones in the text color), tinted inline code, code blocks indented
+  and not highlighted. No Nerd Font glyphs.
 
 ## 10. Desktop app
 

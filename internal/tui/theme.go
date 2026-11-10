@@ -172,9 +172,12 @@ func (t theme) inputStyles() textinput.Styles {
 }
 
 // markdown is the glamour style for SKILL.md previews, in the theme's
-// colors: no document margins, headings in the accent color without
-// markers, inline code on a light tint, code blocks indented and not
-// highlighted (a highlighter would bring its own colors).
+// colors: no document margins, headings without markers (H1 and H2 in the
+// accent color, the others in the text color), inline code on a light tint,
+// code blocks indented and not highlighted (a highlighter would bring its own
+// colors). The accent goes on H1 and H2, not on Heading, because a level
+// cannot reset a color it inherits: glamour turns any string, even "", into
+// a color, and "" into black.
 func (t theme) markdown() gansi.StyleConfig {
 	str := func(s string) *string { return &s }
 	yes, no, zero, two := new(true), new(false), new(uint(0)), new(uint(2))
@@ -200,13 +203,13 @@ func (t theme) markdown() gansi.StyleConfig {
 		Paragraph:             gansi.StyleBlock{},
 		BlockQuote:            gansi.StyleBlock{StylePrimitive: quote, Indent: new(uint(1)), IndentToken: str("│ ")},
 		List:                  gansi.StyleList{LevelIndent: 2},
-		Heading:               gansi.StyleBlock{StylePrimitive: gansi.StylePrimitive{BlockSuffix: "\n", Color: accent, Bold: yes}},
-		H1:                    gansi.StyleBlock{},
-		H2:                    gansi.StyleBlock{},
-		H3:                    gansi.StyleBlock{StylePrimitive: gansi.StylePrimitive{Color: str("")}},
-		H4:                    gansi.StyleBlock{StylePrimitive: gansi.StylePrimitive{Color: str("")}},
-		H5:                    gansi.StyleBlock{StylePrimitive: gansi.StylePrimitive{Color: str("")}},
-		H6:                    gansi.StyleBlock{StylePrimitive: gansi.StylePrimitive{Color: str(""), Bold: no}},
+		Heading:               gansi.StyleBlock{StylePrimitive: gansi.StylePrimitive{BlockSuffix: "\n", Bold: yes}},
+		H1:                    gansi.StyleBlock{StylePrimitive: gansi.StylePrimitive{Color: accent}},
+		H2:                    gansi.StyleBlock{StylePrimitive: gansi.StylePrimitive{Color: accent}},
+		H3:                    gansi.StyleBlock{},
+		H4:                    gansi.StyleBlock{},
+		H5:                    gansi.StyleBlock{},
+		H6:                    gansi.StyleBlock{StylePrimitive: gansi.StylePrimitive{Bold: no}},
 		Strikethrough:         gansi.StylePrimitive{CrossedOut: yes},
 		Emph:                  gansi.StylePrimitive{Italic: yes},
 		Strong:                gansi.StylePrimitive{Bold: yes},
