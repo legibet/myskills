@@ -98,7 +98,7 @@ func TestInstallFromRepoWithSeveralSkills(t *testing.T) {
 func TestFetchSkillFilter(t *testing.T) {
 	e := newEnv(t)
 	_, url := e.repo("src", map[string]string{
-		"review": "skills/review",
+		"review": "pack/review",
 		"tdd":    "skills/tdd-dir",
 	})
 	dir := e.path("src")
@@ -115,7 +115,7 @@ func TestFetchSkillFilter(t *testing.T) {
 	}
 
 	_, err := fetch("review")
-	wantErr(t, err, ErrAmbiguous, "other/review", "skills/review")
+	wantErr(t, err, ErrAmbiguous, "other/review", "pack/review")
 
 	_, err = fetch("nope")
 	wantErr(t, err, ErrNotFound, "nope")
@@ -169,6 +169,44 @@ func TestFetchNamedSkillAtAnyDepth(t *testing.T) {
 	defer func() { _ = f.Close() }()
 	if len(f.Candidates) != 1 || f.Candidates[0].RelPath != deep {
 		t.Fatalf("candidates = %+v", f.Candidates)
+	}
+}
+
+func TestFetchNamedSkillPrefersPlace(t *testing.T) {
+	e := newEnv(t)
+	dir := e.path("src")
+	gitInit(t, dir)
+	for name, rels := range map[string][]string{
+		"a": {"skills/a", ".agents/skills/a"},
+		"b": {".agents/skills/b", ".claude/skills/b", "plugin/skills/b", "tests/w/.agents/skills/b"},
+		"c": {".claude/skills/c", "plugin/skills/c"},
+		"d": {".claude/skills/d", ".cursor/skills/d", "plugin/skills/d"},
+	} {
+		for _, rel := range rels {
+			writeSkill(t, filepath.Join(dir, filepath.FromSlash(rel)), name, rel)
+		}
+	}
+	commitAll(t, dir, "init")
+	url := fileURL(dir)
+
+	for name, want := range map[string]string{"a": "skills/a", "b": ".agents/skills/b", "c": ".claude/skills/c"} {
+		f := e.fetchSkills(url, name)
+		_ = f.Close()
+		if len(f.Candidates) != 1 || f.Candidates[0].RelPath != want {
+			t.Errorf("%s: candidates = %+v, want %s", name, f.Candidates, want)
+		}
+	}
+
+	// Only the matches at the most preferred place are listed.
+	spec, err := source.Parse(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.Skills = []string{"d"}
+	_, err = e.svc.Fetch(context.Background(), spec)
+	wantErr(t, err, ErrAmbiguous, ".claude/skills/d, .cursor/skills/d")
+	if strings.Contains(err.Error(), "plugin") {
+		t.Errorf("error %q lists a less preferred match", err)
 	}
 }
 

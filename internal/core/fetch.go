@@ -50,9 +50,9 @@ func (f *Fetched) Close() error {
 
 // Fetch clones a git source (or reads a local folder) and discovers its
 // candidates (design §5), applying Spec.Subdir and Spec.Skills. A name in
-// Skills matching several candidates is ErrAmbiguous; matching none is
-// ErrNotFound. Of a git source, only the SKILL.md files are checked out;
-// Install checks out the skills it installs.
+// Skills matching several candidates at its most preferred place is
+// ErrAmbiguous; matching none is ErrNotFound. Of a git source, only the
+// SKILL.md files are checked out; Install checks out the skills it installs.
 func (s *Service) Fetch(ctx context.Context, spec source.Spec) (*Fetched, error) {
 	f := &Fetched{Spec: spec}
 	switch spec.Kind {
@@ -157,9 +157,17 @@ func (s *Service) discover(f *Fetched) error {
 	if len(f.Spec.Skills) > 0 {
 		var picked []Candidate
 		for _, want := range f.Spec.Skills {
+			// Of the matches, only those at the most preferred place count.
 			var matched []Candidate
+			best := 0
 			for _, c := range cands {
-				if strings.EqualFold(c.Name, want) || strings.EqualFold(filepath.Base(c.Dir), want) {
+				if !strings.EqualFold(c.Name, want) && !strings.EqualFold(filepath.Base(c.Dir), want) {
+					continue
+				}
+				switch r := placeRank(c.RelPath); {
+				case len(matched) == 0 || r < best:
+					matched, best = []Candidate{c}, r
+				case r == best:
 					matched = append(matched, c)
 				}
 			}
@@ -192,6 +200,24 @@ func (s *Service) discover(f *Fetched) error {
 	}
 	f.Candidates = cands
 	return nil
+}
+
+// placeRank orders the places of a skill in a source, most preferred first:
+// skills/, the universal .agents/skills, another agent's skills folder, then
+// anywhere else. A repository serving several agents keeps a copy of its
+// skill in each agent's folder, and a skill named by a skills.sh result or
+// -s takes the copy at the most preferred place (design §5).
+func placeRank(rel string) int {
+	first, rest, _ := strings.Cut(rel, "/")
+	switch {
+	case first == "skills":
+		return 0
+	case first == ".agents" && strings.HasPrefix(rest, "skills/"):
+		return 1
+	case strings.HasPrefix(first, ".") && strings.HasPrefix(rest, "skills/"):
+		return 2
+	}
+	return 3
 }
 
 // isFolder reports whether the source has a folder at sub, slash-separated

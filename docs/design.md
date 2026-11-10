@@ -196,9 +196,13 @@ Install of a candidate:
 - `skills/<name>` exists: same source (url + ref + path, or local path) → "already in
   library" (suggest `update`), else name conflict error. Nothing is changed.
 - Names (`@skill` and each `-s`) match a candidate's frontmatter name or folder name,
-  ignoring case. A name matching none → not-found error listing the candidates; matching
-  several → ambiguity error listing their paths. A named candidate that is invalid fails
-  with its validation error.
+  ignoring case. A name matching none → not-found error listing the candidates. A name
+  matching several takes the one at the most preferred place: under `skills/`, then
+  `.agents/skills/`, then another `.<agent>/skills/`, then anywhere else. A repository
+  serving several agents keeps a copy of its skill in each agent's folder, and the
+  universal `.agents/skills` copy suits one library copy enabled for every agent. Several
+  matches at that place → ambiguity error listing their paths. A named candidate that is
+  invalid fails with its validation error.
 - Several candidates without `-s`/`--all`: TTY → picker; non-TTY → error listing them.
 
 Local folders: default copies each chosen candidate, record `{type: local, path: <candidate
