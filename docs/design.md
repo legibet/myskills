@@ -367,29 +367,36 @@ Bubble Tea v2, Lip Gloss v2, Bubbles v2, Glamour v2. Alt screen; on exit a summa
 changes made is printed to the normal screen.
 
 ```
- myskills   Skills · Find                     ▸ project ~/projects/foo     global: 3
- ──────────────────────────────────────────────────────────────────────────────────
- All 4   Enabled 2   Issues 0  / filter    │ swiftui-expert-skill
-▌● swiftui-expert-skill  avdlee/…    link  │ avdlee/swiftui-agent-skill
- ◆ tdd  mattpocock/skills  outdated  copy  │ ● link · Universal, Antigravity, Claude Code
- ○ write  tw93/Waza                global  │ ────────────────────────────────────────────
- ○ review  ~/agent-skills                  │ Enabled in ~/projects/foo, ~/opcode
- …                                         │ Write, review, or improve SwiftUI…
-                                           │ (frontmatter fields, rendered SKILL.md)
- ──────────────────────────────────────────────────────────────────────────────────
+ myskills    Skills   Find                                       ~/projects/foo · global 3
+
+ All 4   Enabled 2   Issues 0          / filter │ swiftui-expert-skill                 12%
+                                                │ avdlee/swiftui-agent-skill
+ ● swiftui-expert-skill  avdlee/swift…   link   │ ● link · Universal, Antigravity
+ ◆ tdd                   mat…  outdated  copy   │
+ ○ write                 tw93/Waza       global │ Enabled in ~/projects/foo, ~/opcode
+   review                ~/agent-skills         │
+ …                                              │ Write, review, or improve SwiftUI…
+                                                │ (frontmatter fields, rendered SKILL.md)
+
  ✓ Enabled tdd (copy) in Universal, Antigravity, Claude Code
  space link  c copy  enter read  / filter  f find  u update  a agents  s scope  ? help
 ```
 
-- Layout: list + preview at ≥ 100 columns; narrower: list only. Resizes live.
+- Layout: list + preview at ≥ 100 columns; narrower: list only. Resizes live. Blank lines,
+  not rules, separate the header, the body and the footer; a faint vertical rule separates
+  the list and the preview.
+- Lists: the highlighted row is tinted across its width (reverse video without tinting, see
+  the palette rule below). Names take a column as wide as the widest name, so that what
+  follows them lines up.
 - Reader: `enter`/`l`/`→` opens the highlighted row's preview full screen (in both layouts),
   `esc`/`h`/`←` returns. It scrolls with `↑↓`/`jk`, `ctrl+d`/`ctrl+u` (half page),
   `ctrl+f`/`ctrl+b` or `pgdn`/`pgup` (page), `g`/`G`, and keeps the row actions that leave
   the skill in view: `space`, `c`, `a`, `u`, `e` in Skills; `space`, `o` in Find. It closes
   when its row leaves the list (e.g. disabled on the Enabled tab).
-- Header: the active scope is prominent; the other scope is summarized (e.g. `global: 3`).
-  `s` switches scope (only when a project is available).
-- Preview: name, source (`show`'s source line, §8), state in the active scope; notes (invalid,
+- Header: the active scope (the project's path, or `global`) is prominent; the other scope is
+  summarized (e.g. `global 3`). `s` switches scope (only when a project is available).
+- Preview: name (with the scroll position when the content scrolls), source (`show`'s source
+  line, §8), state in the active scope; notes (invalid,
   broken, conflicts, local changes, outdated copies, update check); `Enabled in <scopes>`;
   then SKILL.md: the description and the optional frontmatter fields that are set (license,
   compatibility, allowed-tools, metadata entries), and the rendered body. Find and the add
@@ -405,7 +412,8 @@ Skills view
   column saying how the skill is enabled in the active scope: `link`, `copy`, `mixed`, or
   `global` for a project that gets it only from the global scope; `broken`, `conflict` or
   `unmanaged` when something is wrong. Glyph for the active scope: `●` link, `◆` copy, `◐`
-  mixed or partial, `○` off, `✗` broken/conflict.
+  mixed or partial, `○` enabled only globally (in a project), `✗` broken/conflict, none when
+  off, so that what is enabled stands out.
 - `space`: off → enable as link (default agents); enabled → disable.
 - `c`: off → enable as copy; link or mixed → convert to copies; copy → convert to links.
 - `a`: per-skill agent checklist for the active scope (toggle placements per agent). Agents
@@ -459,8 +467,13 @@ Behavior rules
   line, and every frame of the app and the add picker keeps only SGR.
 - Quitting waits for the mutations in flight; one whose command never ran is dropped, and
   checkouts of browsed sources are removed.
-- One palette with light/dark variants chosen from the terminal background, one accent color,
-  muted secondary text, semantic success/warning/error. No Nerd Font glyphs.
+- The palette follows the terminal's: the accent (blue) and success/warning/error
+  (green/yellow/red) are its ANSI colors; neutral tones (secondary and faint text, rules, the
+  highlighted row, inline code) blend the foreground and background colors it reports. At
+  256 colors those blends are grays of the palette; when the terminal does not report its
+  colors, shows 16 colors or fewer, or `NO_COLOR` is set, faint text and reverse video take
+  their place. SKILL.md previews use the same colors: accent headings without `#` markers,
+  tinted inline code, code blocks indented and not highlighted. No Nerd Font glyphs.
 
 ## 10. Desktop app
 

@@ -54,7 +54,7 @@ type renderKey struct {
 	doc   string
 	gen   int
 	width int
-	dark  bool
+	theme string // theme.key
 }
 
 type docResult struct {
@@ -73,7 +73,7 @@ type docMsg struct {
 
 // previewer is the preview pane: a fixed header above a scrollable viewport,
 // and the markdown it shows, loaded and rendered off the UI goroutine and
-// cached by doc, width and background.
+// cached by doc, width and palette.
 type previewer struct {
 	vp      viewport.Model
 	item    string // id of the shown item; the scroll resets when it changes
@@ -100,7 +100,7 @@ func newPreviewer() previewer {
 
 // body returns the rendered doc if it is ready, or the error that prevents it.
 func (p *previewer) body(d doc, width int, t theme) (out string, ready bool, err error) {
-	if out, ok := p.out[renderKey{d.key, p.gen[d.key], width, t.dark}]; ok {
+	if out, ok := p.out[renderKey{d.key, p.gen[d.key], width, t.key}]; ok {
 		return out, true, nil
 	}
 	if l, ok := p.md[d.key]; ok && l.err != nil {
@@ -112,7 +112,7 @@ func (p *previewer) body(d doc, width int, t theme) (out string, ready bool, err
 // request returns a command that loads and renders d, unless that is done or
 // in flight.
 func (p *previewer) request(ctx context.Context, d doc, width int, t theme) tea.Cmd {
-	rk := renderKey{d.key, p.gen[d.key], width, t.dark}
+	rk := renderKey{d.key, p.gen[d.key], width, t.key}
 	if _, ok := p.out[rk]; ok || p.pending[rk] {
 		return nil
 	}
@@ -200,7 +200,7 @@ func (p *previewer) recheckLocal() tea.Cmd {
 }
 
 // show sets what the pane displays in a w×h area; the header lines stay
-// fixed above a rule and the scrollable content.
+// fixed above a blank line and the scrollable content.
 func (p *previewer) show(item string, header []string, content string, w, h int) {
 	p.header = header
 	p.vp.SetWidth(w)
@@ -217,14 +217,14 @@ func (p *previewer) show(item string, header []string, content string, w, h int)
 	}
 }
 
+// view renders the pane. When the content scrolls, the first header line
+// ends with how far it is scrolled.
 func (p *previewer) view(t theme, w, h int) string {
 	lines := append([]string{}, p.header...)
-	rule := t.rule.Render(strings.Repeat("─", w))
-	if p.vp.TotalLineCount() > p.vp.Height() {
-		pct := fmt.Sprintf(" %d%%", int(p.vp.ScrollPercent()*100))
-		rule = t.rule.Render(strings.Repeat("─", max(0, w-len(pct)))) + t.hint.Render(pct)
+	if len(lines) > 0 && p.vp.TotalLineCount() > p.vp.Height() {
+		lines[0] = layoutLine(w, lines[0], t.hint.Render(fmt.Sprintf("%d%%", int(p.vp.ScrollPercent()*100))))
 	}
-	lines = append(lines, rule, p.vp.View())
+	lines = append(lines, "", p.vp.View())
 	return fitBlock(strings.Join(lines, "\n"), w, h)
 }
 

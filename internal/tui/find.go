@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"image/color"
 	"maps"
 	"slices"
 	"strings"
@@ -85,6 +84,14 @@ func (r findRow) key() string {
 		return "cand:" + r.cand.Dir
 	}
 	return ""
+}
+
+// name is the row's name as shown, on one line.
+func (r findRow) name() string {
+	if r.res != nil {
+		return sanitize.Line(cmp.Or(r.res.Name, r.res.SkillID))
+	}
+	return sanitize.Line(r.cand.Name)
 }
 
 func (a *app) findRows() []findRow {
@@ -683,19 +690,23 @@ func (a *app) findListView(w, h int) string {
 	lines := []string{
 		" " + layoutLine(w-1, a.fd.input.View(), spin),
 		" " + t.hint.Render(truncate(a.findMeta(w-2), w-2)),
+		"",
 	}
 	rows := a.findRows()
 	msg := a.findMessage(rows, w-2)
 	if len(msg) > 0 {
-		lines = append(lines, "")
 		for _, m := range msg {
 			lines = append(lines, " "+m)
 		}
 		return strings.Join(lines, "\n")
 	}
-	start, end := a.fd.list.window(len(rows), h-2)
+	nameW := 0
+	for _, r := range rows {
+		nameW = max(nameW, ansi.StringWidth(r.name()))
+	}
+	start, end := a.fd.list.window(len(rows), h-len(lines))
 	for i := start; i < end; i++ {
-		lines = append(lines, a.findRowView(rows[i], w, i == a.fd.list.cursor))
+		lines = append(lines, a.findRowView(rows[i], w, nameW, i == a.fd.list.cursor))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -762,24 +773,25 @@ func (a *app) findMessage(rows []findRow, w int) []string {
 	return []string{t.dim.Render("No skills found for “" + truncate(q, w-24) + "”")}
 }
 
-func (a *app) findRowView(r findRow, w int, selected bool) string {
+func (a *app) findRowView(r findRow, w, nameW int, selected bool) string {
 	t := a.th
-	var bg color.Color
+	var base lipgloss.Style
 	nameStyle := t.text
 	selected = selected && !a.fd.typing // the cursor shows once the list has the focus
 	if selected {
-		bg, nameStyle = t.selection, t.bold
+		base, nameStyle = t.selected, t.bold
 	}
 	if r.res != nil && !a.resultsCurrent() {
 		nameStyle = t.dim // results of an earlier query, until the new ones arrive
 	}
-	left := []seg{cursorSeg(t, selected)}
+	left := []seg{{text: " "}}
+	nameW = nameColumn(nameW, w, 11) // an install count and the gaps
 	if r.res != nil {
 		left = append(left,
-			seg{text: sanitize.Line(cmp.Or(r.res.Name, r.res.SkillID)), style: nameStyle},
+			seg{text: padRight(r.name(), nameW), style: nameStyle},
 			seg{text: "  " + sanitize.Line(r.res.Source), style: t.hint})
 	} else {
-		left = append(left, seg{text: sanitize.Line(r.cand.Name), style: nameStyle})
+		left = append(left, seg{text: padRight(r.name(), nameW), style: nameStyle})
 		if r.cand.RelPath != "" {
 			left = append(left, seg{text: "  " + sanitize.Line(r.cand.RelPath), style: t.hint})
 		}
@@ -791,7 +803,7 @@ func (a *app) findRowView(r findRow, w int, selected bool) string {
 	var right []seg
 	if text, st := a.findStatus(r); text != "" {
 		if a.busy[r.key()] {
-			right = append(right, seg{text: a.spinnerText(bg)}, seg{text: " " + text, style: st})
+			right = append(right, seg{text: a.spinnerText(base)}, seg{text: " " + text, style: st})
 		} else {
 			right = append(right, seg{text: text, style: st})
 		}
@@ -802,12 +814,12 @@ func (a *app) findRowView(r findRow, w int, selected bool) string {
 			count = append([]seg{{text: "  "}}, count...)
 		}
 		with := append(slices.Clone(right), count...)
-		if rw := segsWidth(with) + 1; len(right) == 0 || segsWidth(left)+rw+1 <= w || (rw+1)*5 <= w*2 {
+		if rw := segsWidth(with) + 1; len(right) == 0 || segsWidth(left)+rw+2 <= w || (rw+2)*5 <= w*2 {
 			right = with
 		}
 	}
 	right = append(right, seg{text: " "})
-	return layoutRow(w, bg, left, right)
+	return layoutRow(w, base, left, right)
 }
 
 // findStatus is the right-hand state of a row.
@@ -836,11 +848,9 @@ func (a *app) findStatus(r findRow) (string, lipgloss.Style) {
 }
 
 // spinnerText is the current spinner frame on the given background.
-func (a *app) spinnerText(bg color.Color) string {
+func (a *app) spinnerText(base lipgloss.Style) string {
 	sp := a.spin
-	if bg != nil {
-		sp.Style = sp.Style.Background(bg)
-	}
+	sp.Style = sp.Style.Inherit(base)
 	return sp.View()
 }
 

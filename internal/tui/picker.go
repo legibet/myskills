@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"errors"
-	"image/color"
 	"io/fs"
 	"strings"
 
@@ -23,6 +22,7 @@ import (
 type picker struct {
 	f       *core.Fetched
 	from    string
+	colors  termColors
 	th      theme
 	keys    pickerKeys
 	help    help.Model
@@ -46,7 +46,8 @@ func newPicker(f *core.Fetched) *picker {
 		pv:      newPreviewer(),
 	}
 	p.help.ShortSeparator = "  "
-	p.applyTheme(newTheme(true))
+	p.colors = newTermColors()
+	p.applyTheme(newTheme(p.colors))
 	return p
 }
 
@@ -69,16 +70,17 @@ func selectable(c core.Candidate) (bool, string) {
 }
 
 func (p *picker) Init() tea.Cmd {
-	return tea.RequestBackgroundColor
+	return requestTermColors()
 }
 
 func (p *picker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
+	if p.colors.update(msg) {
+		p.applyTheme(newTheme(p.colors))
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		p.width, p.height = msg.Width, msg.Height
-	case tea.BackgroundColorMsg:
-		p.applyTheme(newTheme(msg.IsDark()))
 	case tea.KeyPressMsg:
 		cmd = p.key(msg)
 	case docMsg:
@@ -158,7 +160,7 @@ type pickerLayout struct {
 func (p *picker) layout() pickerLayout {
 	l := pickerLayout{wide: p.width >= wideWidth, listW: max(0, p.width-2), bodyH: max(1, p.height-5)}
 	if l.wide {
-		l.listW = max(44, min(p.width*2/5, 64))
+		l.listW = max(44, min(p.width*9/20, 72))
 		l.prevW = p.width - l.listW - 5
 	}
 	return l
@@ -218,11 +220,10 @@ func (p *picker) render() string {
 	}
 	right := t.dim.Render(plural(len(p.f.Candidates), "skill", "skills")+" · ") + t.accented.Render(selectedLabel(n))
 	from := p.from                                                                               // shortened from the left so that the counts stay
-	if w, fit := ansi.StringWidth(from), max(8, p.width-2-20-lipgloss.Width(right)-2); w > fit { // 20: "myskills   Add from "
+	if w, fit := ansi.StringWidth(from), max(8, p.width-2-21-lipgloss.Width(right)-2); w > fit { // 21: "myskills    Add from "
 		from = ansi.TruncateLeft(from, w-fit+1, "…")
 	}
-	header := " " + layoutLine(p.width-2, t.title.Render("myskills")+"   "+t.dim.Render("Add from ")+t.bold.Render(from), right)
-	rule := t.rule.Render(strings.Repeat("─", p.width))
+	header := " " + layoutLine(p.width-2, t.title.Render("myskills")+"    "+t.dim.Render("Add from ")+t.bold.Render(from), right)
 
 	list := fitBlock(p.listView(l.listW, l.bodyH), l.listW, l.bodyH)
 	var body string
@@ -242,9 +243,9 @@ func (p *picker) render() string {
 	}
 	return strings.Join([]string{
 		header,
-		rule,
+		"",
 		body,
-		rule,
+		"",
 		" " + truncate(status, p.width-2),
 		" " + fitHelp(p.help, p.width-2, p.keys.ShortHelp()),
 	}, "\n")
@@ -262,14 +263,19 @@ func (p *picker) listView(w, h int) string {
 	if len(p.f.Candidates) == 0 {
 		return " " + t.dim.Render("No skills found in this source")
 	}
+	nameW := 0
+	for _, c := range p.f.Candidates {
+		nameW = max(nameW, ansi.StringWidth(sanitize.Line(c.Name)))
+	}
+	nameW = nameColumn(nameW, w, 9) // the check box and the gaps
 	var lines []string
 	start, end := p.list.window(len(p.f.Candidates), h)
 	for i := start; i < end; i++ {
 		c := p.f.Candidates[i]
-		var bg color.Color
+		var base lipgloss.Style
 		nameStyle := t.text
 		if i == p.list.cursor {
-			bg, nameStyle = t.selection, t.bold
+			base, nameStyle = t.selected, t.bold
 		}
 		ok, _ := selectable(c)
 		box := seg{text: "[ ]", style: t.hint}
@@ -289,14 +295,14 @@ func (p *picker) listView(w, h int) string {
 			right = []seg{{text: word, style: t.bad}}
 		}
 		if !ok {
-			nameStyle = nameStyle.Foreground(t.muted)
+			nameStyle = nameStyle.Inherit(t.dim)
 		}
-		left := []seg{cursorSeg(t, i == p.list.cursor), box, {text: " "}, {text: sanitize.Line(c.Name), style: nameStyle}}
+		left := []seg{{text: " "}, box, {text: " "}, {text: padRight(sanitize.Line(c.Name), nameW), style: nameStyle}}
 		if c.RelPath != "" {
 			left = append(left, seg{text: "  " + sanitize.Line(c.RelPath), style: t.hint})
 		}
 		right = append(right, seg{text: " "})
-		lines = append(lines, layoutRow(w, bg, left, right))
+		lines = append(lines, layoutRow(w, base, left, right))
 	}
 	return strings.Join(lines, "\n")
 }

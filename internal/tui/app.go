@@ -38,6 +38,7 @@ type app struct {
 	checkouts *checkouts // of browsed sources; Run closes those left
 
 	width, height int
+	colors        termColors
 	th            theme
 	help          help.Model
 	spin          spinner.Model
@@ -106,13 +107,14 @@ func newApp(ctx context.Context, svc service, opts Options) *app {
 		a.scope = core.Global
 	}
 	a.help.ShortSeparator = "  "
-	a.applyTheme(newTheme(true))
+	a.colors = newTermColors()
+	a.applyTheme(newTheme(a.colors))
 	a.fd.input.SetValue(opts.Query)
 	return a
 }
 
-// applyTheme switches the palette, e.g. when the terminal reports a light
-// background.
+// applyTheme switches the palette, e.g. when the terminal reports its
+// colors.
 func (a *app) applyTheme(t theme) {
 	a.th = t
 	a.help.Styles = t.helpStyles()
@@ -122,7 +124,7 @@ func (a *app) applyTheme(t theme) {
 }
 
 func (a *app) Init() tea.Cmd {
-	cmds := []tea.Cmd{tea.RequestBackgroundColor, a.load()}
+	cmds := []tea.Cmd{requestTermColors(), a.load()}
 	if a.view == Find {
 		cmds = append(cmds, a.enterFind(true))
 	}
@@ -144,13 +146,15 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (a *app) update(msg tea.Msg) tea.Cmd {
+	if a.colors.update(msg) {
+		a.applyTheme(newTheme(a.colors))
+		return nil
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.width, a.height = msg.Width, msg.Height
 	case tea.FocusMsg:
 		return a.reload()
-	case tea.BackgroundColorMsg:
-		a.applyTheme(newTheme(msg.IsDark()))
 	case tea.KeyPressMsg:
 		return a.key(msg)
 	case tea.PasteMsg:
@@ -322,8 +326,8 @@ func (a *app) sync() tea.Cmd {
 		a.closeReader() // the row read left the list, e.g. disabled on the Enabled tab
 	}
 	l := a.layout()
-	a.sk.list.fit(len(a.sk.rows), l.bodyH-1)
-	a.fd.list.fit(len(a.findRows()), l.bodyH-2)
+	a.sk.list.fit(len(a.sk.rows), l.bodyH-2)
+	a.fd.list.fit(len(a.findRows()), l.bodyH-3)
 	a.sk.filter.SetWidth(max(1, l.listW-10))
 	a.fd.input.SetWidth(max(1, l.listW-8))
 	var cmds []tea.Cmd
@@ -600,7 +604,7 @@ func (a *app) layout() layout {
 		bodyH: max(1, a.height-4-helpH),
 	}
 	if l.wide {
-		l.listW = max(44, min(a.width*2/5, 64))
+		l.listW = max(44, min(a.width*9/20, 72))
 		l.prevW = a.width - l.listW - 5 // margins and " │ "
 	}
 	return l
@@ -626,12 +630,11 @@ func (a *app) render() string {
 			t.dim.Render(truncate("Make the terminal a little larger", a.width)))
 	}
 	l := a.layout()
-	rule := t.rule.Render(strings.Repeat("─", a.width))
 	s := strings.Join([]string{
 		a.headerView(),
-		rule,
+		"",
 		a.bodyView(l),
-		rule,
+		"",
 		a.statusView(),
 		" " + indent(a.helpView()),
 	}, "\n")
@@ -652,26 +655,21 @@ func (a *app) headerView() string {
 		}
 		return t.dim.Render(name)
 	}
-	left := " " + t.title.Render("myskills") + "   " +
-		tab("Skills", a.view == Skills) + t.hint.Render(" · ") + tab("Find", a.view == Find)
+	left := " " + t.title.Render("myskills") + "    " +
+		tab("Skills", a.view == Skills) + "   " + tab("Find", a.view == Find)
 
 	// The right side holds the update check, the active scope and a count of
 	// the other scope. The scope always stays, its path shortened from the
 	// left; the others go when there is no room.
 	room := a.width - lipgloss.Width(left) - 4 // gap and right margin
-	scope := t.accented.Render("▸ ")
-	if a.scope.IsGlobal() {
-		scope += t.title.Render("global")
-	} else {
-		label, word := sanitize.Line(a.scope.String()), "project "
-		if room-2-len(word) < min(ansi.StringWidth(label), 16) {
-			word = "" // a path is clearly a project; keep room for it
+	scope := "global"
+	if !a.scope.IsGlobal() {
+		scope = sanitize.Line(a.scope.String())
+		if w, fit := ansi.StringWidth(scope), max(2, room); w > fit {
+			scope = ansi.TruncateLeft(scope, w-fit+1, "…")
 		}
-		if w, fit := ansi.StringWidth(label), max(2, room-2-len(word)); w > fit {
-			label = ansi.TruncateLeft(label, w-fit+1, "…")
-		}
-		scope += t.dim.Render(word) + t.title.Render(label)
 	}
+	scope = t.bold.Render(scope)
 	var checking, other string
 	if a.sk.checking {
 		text := "checking updates"
@@ -685,11 +683,12 @@ func (a *app) headerView() string {
 		if !sc.IsGlobal() {
 			name = "project"
 		}
-		other = t.dim.Render(name + ": " + strconv.Itoa(len(a.data.status[sc].Enablements)))
+		other = t.dim.Render(name + " " + strconv.Itoa(len(a.data.status[sc].Enablements)))
 	}
 	var right string
 	for _, parts := range [][]string{{checking, scope, other}, {checking, scope}, {scope}} {
-		right = strings.Join(slices.DeleteFunc(parts, func(s string) bool { return s == "" }), "   ")
+		parts = slices.DeleteFunc(parts, func(s string) bool { return s == "" })
+		right = strings.Join(parts, t.hint.Render(" · "))
 		if lipgloss.Width(right) <= room {
 			break
 		}

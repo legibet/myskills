@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/legibet/myskills/internal/agent"
@@ -27,7 +28,7 @@ func rowNames(a *app) []string {
 
 func TestSkillsTabsAndCounts(t *testing.T) {
 	h := newHarness(t, libraryFixture(), projectOptions(), 120, 30)
-	h.contains("All 4", "Enabled 2", "Issues 4", "▸ project /work/proj", "global: 1")
+	h.contains("All 4", "Enabled 2", "Issues 4", "/work/proj · global 1")
 	if got, want := rowNames(h.a), []string{"broken", "notes", "review", "tdd"}; !slices.Equal(got, want) {
 		t.Fatalf("All rows = %v, want %v", got, want)
 	}
@@ -64,21 +65,26 @@ func TestSkillsGlyphsAndBadges(t *testing.T) {
 		t.Fatalf("no line for %s", name)
 		return ""
 	}
+	// Rows not enabled have no glyph; the library path shows only for names
+	// that repeat.
+	sourceCol := -1
 	for name, want := range map[string][]string{
-		"tdd":    {"● tdd  acme/tdd", "link"},
-		"notes":  {"◐ notes  acme/notes", "modified", "copy"},
-		"review": {"○ review  /home/agent-skills", "global"}, // enabled only globally
-		"broken": {"○ broken  local", "invalid"},
+		"tdd":    {"●", "tdd", "acme/tdd", "link"},
+		"notes":  {"◐", "notes", "acme/notes", "modified", "copy"},
+		"review": {"○", "review", "/home/agent-skills", "global"}, // enabled only globally
+		"broken": {"broken", "local", "invalid"},
 	} {
 		line := find(name)
-		for _, w := range want {
-			if !strings.Contains(line, w) {
-				t.Errorf("row %s = %q, want %q", name, line, w)
-			}
+		if got := strings.Fields(line); !slices.Equal(got, want) {
+			t.Errorf("row %s = %q, want fields %q", name, line, want)
 		}
-		// The library path shows only for names that repeat.
-		if strings.Contains(line, "agent-skills/") || strings.Contains(line, "linked") {
-			t.Errorf("row %s = %q", name, line)
+		// Sources start in one column.
+		source := want[slices.Index(want, name)+1]
+		before, _, _ := strings.Cut(line, source)
+		if col := ansi.StringWidth(before); sourceCol >= 0 && col != sourceCol {
+			t.Errorf("row %s: source at column %d, others at %d", name, col, sourceCol)
+		} else {
+			sourceCol = col
 		}
 	}
 }
@@ -288,7 +294,7 @@ func TestScopeSwitch(t *testing.T) {
 	if !h.a.scope.IsGlobal() {
 		t.Fatal("s should switch to global")
 	}
-	h.contains("▸ global", "project: 2", "Enabled 1")
+	h.contains("global · project 2", "Enabled 1")
 	h.cursorTo("review")
 	h.press("space")
 	if got := h.svc.called("Disable"); !slices.Equal(got, []string{"Disable global agent-skills/review agents=[] force=false"}) {
@@ -406,7 +412,7 @@ func TestUpdateModifiedLibrarySkillAsks(t *testing.T) {
 
 func TestEmptyLibrary(t *testing.T) {
 	h := newHarness(t, newFake(), Options{}, 120, 30)
-	h.contains("Your library is empty", "search skills.sh", "myskills add <source>", "▸ global")
+	h.contains("Your library is empty", "search skills.sh", "myskills add <source>", "global")
 	h.press("f")
 	if h.a.view != Find {
 		t.Fatal("f should open Find")
@@ -514,17 +520,34 @@ func TestViewFitsAnySize(t *testing.T) {
 	}
 }
 
-func TestCursorShowsWithoutColor(t *testing.T) {
+// The selected row is tinted with a blend of the terminal's colors once the
+// terminal reports them, and reversed until then, which shows without colors
+// too.
+func TestCursorRow(t *testing.T) {
 	h := newHarness(t, libraryFixture(), projectOptions(), 120, 30)
 	h.press("down")
-	var marked []string
-	for l := range strings.SplitSeq(stripView(h.a.View().Content), "\n") {
-		if strings.Contains(l, "▌") {
-			marked = append(marked, l)
+	reverse := regexp.MustCompile(`\x1b\[(\d+;)*7(;\d+)*m`)
+	tint := regexp.MustCompile(`\x1b\[(\d+;)*48;2;\d+;\d+;\d+(;\d+)*m`)
+	marked := func(re *regexp.Regexp) []string {
+		var out []string
+		for l := range strings.SplitSeq(h.a.View().Content, "\n") {
+			if list, _, _ := strings.Cut(l, "│"); re.MatchString(list) {
+				out = append(out, ansi.Strip(list))
+			}
 		}
+		return out
 	}
-	if len(marked) != 1 || !strings.Contains(marked[0], h.a.sk.rows[1].name()) {
-		t.Fatalf("marked lines = %q", marked)
+	name := h.a.sk.rows[1].name()
+	if got := marked(reverse); len(got) != 1 || !strings.Contains(got[0], name) {
+		t.Fatalf("reversed rows = %q", got)
+	}
+	h.send(tea.ForegroundColorMsg{Color: lipgloss.Color("#dddddd")})
+	h.send(tea.BackgroundColorMsg{Color: lipgloss.Color("#202020")})
+	if got := marked(tint); len(got) != 1 || !strings.Contains(got[0], name) {
+		t.Fatalf("tinted rows = %q", got)
+	}
+	if got := marked(reverse); len(got) != 0 {
+		t.Fatalf("reversed rows = %q", got)
 	}
 }
 
@@ -534,7 +557,7 @@ func TestHeaderKeepsScopeWithLongPath(t *testing.T) {
 	for _, w := range []int{120, 60, 40} {
 		h.send(windowSize(w, 20))
 		header := ansi.Strip(strings.Split(h.a.View().Content, "\n")[0])
-		if ansi.StringWidth(header) > w || !strings.Contains(header, "▸ ") || !strings.HasSuffix(header, "/proj ") {
+		if ansi.StringWidth(header) > w || !strings.Contains(header, "…") || !strings.HasSuffix(header, "/proj ") {
 			t.Errorf("width %d: header = %q", w, header)
 		}
 	}
@@ -802,7 +825,7 @@ func TestReloadReadsChangedFiles(t *testing.T) {
 // A load in flight on reload may have read the file before it changed: its
 // result is dropped and the doc loads again.
 func TestReloadRestartsLoadsInFlight(t *testing.T) {
-	ctx, th := context.Background(), newTheme(true)
+	ctx, th := context.Background(), newTheme(newTermColors())
 	p := newPreviewer()
 	d := dirDoc("/lib/tdd")
 	load := p.request(ctx, d, 40, th)

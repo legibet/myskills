@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"image/color"
 	"os"
 	"os/exec"
 	"path"
@@ -45,6 +44,7 @@ type skillsState struct {
 	rows      []row // shown rows: tab and filter applied
 	counts    [len(tabNames)]int
 	stateW    int // width of the state column
+	nameW     int // width of the widest name shown, for the column after it
 	list      listCursor
 	updates   map[string]core.UpdateCheck // last check results by library path
 	checking  bool
@@ -149,7 +149,7 @@ func (a *app) rebuildRows() {
 	all := a.allRows()
 	var counts [len(tabNames)]int
 	var shown []row
-	a.sk.stateW = 0
+	a.sk.stateW, a.sk.nameW = 0, 0
 	for _, r := range all {
 		for t := range tabNames {
 			if r.in(tab(t)) {
@@ -167,6 +167,9 @@ func (a *app) rebuildRows() {
 		shown = filterRows(shown, q)
 	}
 	a.sk.rows = shown
+	for _, r := range shown {
+		a.sk.nameW = max(a.sk.nameW, ansi.StringWidth(sanitize.Line(r.name())))
+	}
 	for i, r := range shown {
 		if r.key() == keep {
 			a.sk.list.cursor = i
@@ -1089,12 +1092,12 @@ func (a *app) skillsPlaceholder(l layout) (string, bool) {
 }
 
 func (a *app) skillsListView(w, h int) string {
-	lines := []string{a.tabsLine(w)}
+	lines := []string{a.tabsLine(w), ""}
 	if len(a.sk.rows) == 0 {
-		lines = append(lines, "", " "+a.emptyTabText())
+		lines = append(lines, " "+a.emptyTabText())
 		return strings.Join(lines, "\n")
 	}
-	start, end := a.sk.list.window(len(a.sk.rows), h-1)
+	start, end := a.sk.list.window(len(a.sk.rows), h-len(lines))
 	for i := start; i < end; i++ {
 		lines = append(lines, a.skillRow(a.sk.rows[i], w, i == a.sk.list.cursor))
 	}
@@ -1152,24 +1155,21 @@ func layoutLine(w int, left, right string) string {
 
 func (a *app) skillRow(r row, w int, selected bool) string {
 	t := a.th
-	var bg color.Color
+	var base lipgloss.Style
 	nameStyle := t.text
 	if selected {
-		bg, nameStyle = t.selection, t.bold
+		base, nameStyle = t.selected, t.bold
 	}
 	glyph, gs := a.glyph(r)
 	if a.busy[r.key()] {
-		sp := a.spin
-		if bg != nil {
-			sp.Style = sp.Style.Background(bg)
-		}
-		glyph, gs = sp.View(), lipgloss.NewStyle()
+		glyph, gs = a.spinnerText(base), lipgloss.NewStyle()
 	}
+	nameW := nameColumn(a.sk.nameW, w, a.sk.stateW+7) // the glyph, the state and the gaps
 	left := []seg{
-		cursorSeg(t, selected),
+		{text: " "},
 		{text: glyph, style: gs},
 		{text: " "},
-		{text: sanitize.Line(r.name()), style: nameStyle, hl: r.hl, hlStyle: nameStyle.Foreground(t.accent)},
+		{text: padRight(sanitize.Line(r.name()), nameW), style: nameStyle, hl: r.hl, hlStyle: nameStyle.Foreground(t.accent)},
 	}
 	if r.entry != nil {
 		left = append(left, seg{text: "  " + strings.Join(a.namesOf(r.entry.Agents), ", "), style: t.hint})
@@ -1186,12 +1186,12 @@ func (a *app) skillRow(r row, w int, selected bool) string {
 	}
 	if a.sk.stateW > 0 {
 		word, ws := a.stateWord(r)
-		right = append(right, seg{text: word + strings.Repeat(" ", a.sk.stateW-len(word)), style: ws})
+		right = append(right, seg{text: padRight(word, a.sk.stateW), style: ws})
 	} else if len(right) > 0 {
 		right = right[:len(right)-1]
 	}
 	right = append(right, seg{text: " "})
-	return layoutRow(w, bg, left, right)
+	return layoutRow(w, base, left, right)
 }
 
 // glyph is the row's state in the active scope.
@@ -1210,8 +1210,10 @@ func (a *app) glyph(r row) (string, lipgloss.Style) {
 		return "●", t.accented
 	case len(r.others) > 0:
 		return "✗", t.bad
+	case r.global:
+		return "○", t.dim
 	}
-	return "○", t.hint
+	return " ", t.text
 }
 
 // stateWord is the right column: how the skill is enabled in the active
@@ -1309,7 +1311,11 @@ func (a *app) skillPreview(w int) (item string, header []string, intro string, d
 	case core.CheckFailed:
 		note(t.bad, "✗ Update check failed: "+sanitize.Line(fmt.Sprint(c.Err)))
 	}
-	if scopes := a.data.usage[sk.Path]; len(scopes) > 0 {
+	scopes := a.data.usage[sk.Path]
+	if r.global { // the state line says so
+		scopes = slices.DeleteFunc(slices.Clone(scopes), core.Scope.IsGlobal)
+	}
+	if len(scopes) > 0 {
 		note(t.dim, "Enabled in "+scopeList(scopes))
 	}
 	intro = strings.Join(notes, "\n")
@@ -1333,10 +1339,12 @@ func (a *app) stateLine(r row) string {
 		return t.bad.Render("✗ broken link")
 	case len(r.others) > 0:
 		return t.bad.Render("✗ conflict")
+	case r.global:
+		return t.dim.Render("○ enabled globally, not in this project")
 	case a.scope.IsGlobal():
-		return t.hint.Render("○ not enabled globally")
+		return t.hint.Render("not enabled globally")
 	}
-	return t.hint.Render("○ not enabled in this project")
+	return t.hint.Render("not enabled in this project")
 }
 
 func (a *app) entryPreview(r row, w int) (item string, header []string, intro string, d *doc) {

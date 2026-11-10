@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -48,35 +47,25 @@ type seg struct {
 	hlStyle lipgloss.Style
 }
 
-// cursorSeg is the first cell of a list row: a bar on the highlighted row, so
-// that the cursor shows without colors too (NO_COLOR drops the background).
-func cursorSeg(t theme, selected bool) seg {
-	if selected {
-		return seg{text: "▌", style: t.accented}
-	}
-	return seg{text: " "}
-}
-
 // layoutRow renders a list row of exactly w cells: left segments in order,
 // truncated when space runs out, and right segments aligned to the right
 // edge. When the row does not fit, the first right segments are dropped until
 // the right side takes at most 40% of the row, so put the most important ones
-// last. bg, when not nil, fills the whole row.
-func layoutRow(w int, bg color.Color, left, right []seg) string {
+// last. base styles the whole row underneath its segments: the highlight of
+// the selected row, or nothing.
+func layoutRow(w int, base lipgloss.Style, left, right []seg) string {
 	paint := func(st lipgloss.Style, s string) string {
-		if bg != nil {
-			st = st.Background(bg)
-		}
-		return st.Render(s)
+		return st.Inherit(base).Render(s)
 	}
+	const gap = 2 // at least, between the sides
 	lw, rw := segsWidth(left), segsWidth(right)
-	for len(right) > 0 && lw+rw+1 > w && (rw+1)*5 > w*2 {
+	for len(right) > 0 && lw+rw+gap > w && (rw+gap)*5 > w*2 {
 		right = right[1:]
 		rw = segsWidth(right)
 	}
 	avail := w - rw
 	if rw > 0 {
-		avail--
+		avail -= gap
 	}
 
 	var b strings.Builder
@@ -88,8 +77,12 @@ func layoutRow(w int, bg color.Color, left, right []seg) string {
 		text := s.text
 		cut := false
 		if used+ansi.StringWidth(text) > avail {
-			text = truncate(text, avail-used)
-			cut = true
+			if trimmed := strings.TrimRight(text, " "); used+ansi.StringWidth(trimmed) <= avail {
+				text = padRight(trimmed, avail-used) // only the padding of a column is cut
+			} else {
+				text = truncate(text, avail-used)
+				cut = true
+			}
 		}
 		used += ansi.StringWidth(text)
 		if len(s.hl) == 0 {
@@ -106,17 +99,26 @@ func layoutRow(w int, bg color.Color, left, right []seg) string {
 				idx = append(idx, i)
 			}
 		}
-		hl, st := s.hlStyle, s.style
-		if bg != nil {
-			hl, st = hl.Background(bg), st.Background(bg)
-		}
-		b.WriteString(lipgloss.StyleRunes(text, idx, hl, st))
+		b.WriteString(lipgloss.StyleRunes(text, idx, s.hlStyle.Inherit(base), s.style.Inherit(base)))
 	}
 	b.WriteString(paint(lipgloss.NewStyle(), strings.Repeat(" ", max(0, w-used-rw))))
 	for _, s := range right {
 		b.WriteString(paint(s.style, s.text))
 	}
 	return b.String()
+}
+
+// nameColumn is the width of the name column of a row of w cells, of which
+// reserved go to the other columns and gaps: the widest name, as long as at
+// least 8 cells remain for the column after it, otherwise less, but never
+// under 40% of the row, so that one long name does not starve the others.
+func nameColumn(widest, w, reserved int) int {
+	return min(widest, max(w*2/5, w-reserved-8))
+}
+
+// padRight pads s with spaces to w cells.
+func padRight(s string, w int) string {
+	return s + strings.Repeat(" ", max(0, w-ansi.StringWidth(s)))
 }
 
 // segsWidth is the width of segments in cells.
