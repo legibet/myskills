@@ -130,7 +130,6 @@ type buttonKind int
 const (
 	plain buttonKind = iota
 	primary
-	destructive
 )
 
 // button is a push button: a flat rounded fill, the accent's for the
@@ -145,12 +144,9 @@ func iconTextButton(c *ui.Context, icon *ui.SVG, title string, kind buttonKind) 
 	b := ui.ButtonBase(c).MinHeight(26).Padding(3, 12).Radius(6).Gap(6).Justify(ui.Center).Shrink(0).
 		FontSize(textBody(c)).FontWeight(500).TextColor(p.text).Label(title)
 	fill := p.fill
-	switch {
-	case kind == primary && c.WindowActive():
+	if kind == primary && c.WindowActive() {
 		fill = accent(c)
 		b.TextColor(c.Theme().AccentText)
-	case kind == destructive:
-		b.TextColor(p.red)
 	}
 	switch {
 	case b.Pressed():

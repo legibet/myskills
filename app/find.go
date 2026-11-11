@@ -26,12 +26,10 @@ const (
 	searchDebounce = 250 * time.Millisecond
 )
 
-// The busy keys of Find's own work: the search or the fetch of the query,
-// and the load of the preview shown.
+// The busy keys of Find's own work: the search or the fetch of the query.
 const (
-	findSearch  = "find:search"
-	findFetch   = "find:fetch"
-	findPreview = "find:preview"
+	findSearch = "find:search"
+	findFetch  = "find:fetch"
 )
 
 // findPage is the state of the Find page: a skills.sh search, or the
@@ -395,7 +393,6 @@ func (a *app) loadPreview(res skillssh.Result) {
 	seq, key := p.previewSeq, findRow{res: &res}.key()
 	ctx, cancel := context.WithCancel(a.ctx)
 	p.previewing, p.previewCancel = key, cancel
-	a.busy[findPreview] = true
 	a.work.Go(func() {
 		md, err := a.svc.SkillsSH.SkillMarkdown(ctx, res.Source, res.SkillID)
 		canceled := ctx.Err() != nil
@@ -411,7 +408,6 @@ func (a *app) loadPreview(res skillssh.Result) {
 			if seq == p.previewSeq {
 				cancel()
 				p.previewing, p.previewCancel = "", nil
-				delete(a.busy, findPreview)
 			}
 		})
 	})

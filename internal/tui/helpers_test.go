@@ -72,8 +72,8 @@ func newFake() *fakeService {
 		errs:   map[string][]error{},
 		results: map[string][]skillssh.Result{
 			"review": {
-				{ID: "1", Source: "acme/skills", SkillID: "review", Name: "review", Installs: 12345},
-				{ID: "2", Source: "other/repo", SkillID: "code-review", Name: "Code Review", Installs: 999},
+				{Source: "acme/skills", SkillID: "review", Name: "review", Installs: 12345},
+				{Source: "other/repo", SkillID: "code-review", Name: "Code Review", Installs: 999},
 			},
 		},
 		markdown: map[string]string{},

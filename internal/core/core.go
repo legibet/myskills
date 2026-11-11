@@ -62,11 +62,6 @@ func Open() (*Service, error) {
 	return New(paths), nil
 }
 
-// Paths returns the files the service works on.
-func (s *Service) Paths() store.Paths {
-	return s.paths
-}
-
 // state is config.json and lock.json as loaded for one operation.
 type state struct {
 	cfg    store.Config

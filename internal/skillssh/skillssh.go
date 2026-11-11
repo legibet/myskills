@@ -33,7 +33,6 @@ func New() *Client {
 
 // Result is one search hit.
 type Result struct {
-	ID       string `json:"id"`
 	Source   string `json:"source"`  // GitHub owner/repo
 	SkillID  string `json:"skillId"` // skill name
 	Name     string `json:"name"`    // display name, may differ from SkillID

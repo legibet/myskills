@@ -93,7 +93,7 @@ func (h *harness) settle() {
 	quiet := 0
 	for quiet < 3 {
 		if time.Now().After(deadline) {
-			h.t.Fatalf("the app is still working: loading %v, busy %v, checking %v, frame pending %v", h.a.loading, h.a.busy, h.a.updates.checking, h.tt.FramePending())
+			h.t.Fatalf("the app is still working: loading %v, busy %v, checking %v, previewing %q, frame pending %v", h.a.loading, h.a.busy, h.a.updates.checking, h.a.find.previewing, h.tt.FramePending())
 		}
 		h.mu.Lock()
 		queue := h.queue
@@ -104,7 +104,7 @@ func (h *harness) settle() {
 		}
 		h.tt.Frame()
 		h.tt.Advance(50 * time.Millisecond) // the tester's clock: animations and timers move with it
-		if len(queue) == 0 && !h.a.loading && len(h.a.busy) == 0 && !h.a.agents.add.saving && !h.a.updates.checking && h.a.find.due.IsZero() && !h.tt.FramePending() {
+		if len(queue) == 0 && !h.a.loading && len(h.a.busy) == 0 && !h.a.agents.add.saving && !h.a.updates.checking && h.a.find.due.IsZero() && h.a.find.previewing == "" && !h.tt.FramePending() {
 			quiet++
 		} else {
 			quiet = 0

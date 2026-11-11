@@ -56,9 +56,9 @@ func TestSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Result{
-		{ID: "b/r/z", Source: "b/r", SkillID: "z", Name: "Zed", Installs: 5},
-		{ID: "a/r/y", Source: "a/r", SkillID: "y", Name: "y", Installs: 12853},
-		{ID: "a/r/x", Source: "a/r", SkillID: "x", Name: "x"},
+		{Source: "b/r", SkillID: "z", Name: "Zed", Installs: 5},
+		{Source: "a/r", SkillID: "y", Name: "y", Installs: 12853},
+		{Source: "a/r", SkillID: "x", Name: "x"},
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("Search = %+v\nwant %+v", got, want)
