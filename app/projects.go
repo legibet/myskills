@@ -248,7 +248,7 @@ func (a *app) addSkillsView(c *ui.Context) {
 			})
 			ui.Row(c).Gap(10).AlignItems(ui.Center).Children(func() {
 				segmented(c, &d.mode, "Mode", "Link", "Copy").Width(130).Shrink(0)
-				ui.Text(c, modeHint(d.mode)).FontSize(textSmall(c)).TextColor(pal.text2).Grow(1)
+				ui.Text(c, modeHint(d.scope, d.mode)).FontSize(textSmall(c)).TextColor(pal.text2).Grow(1)
 			})
 			ui.Row(c).Gap(8).Justify(ui.End).Children(func() {
 				if button(c, "Cancel", plain).Clicked() {
@@ -279,8 +279,13 @@ func (a *app) openAddSkills(sc core.Scope) {
 	a.projects.add = addSkills{open: true, scope: sc, picks: map[string]bool{}}
 }
 
-func modeHint(mode int) string {
-	if mode == 1 {
+func modeHint(sc core.Scope, mode int) string {
+	switch {
+	case sc.IsGlobal() && mode == 1:
+		return "Copied from the library; Refresh brings in its later changes."
+	case sc.IsGlobal():
+		return "Linked to the library."
+	case mode == 1:
 		return "Copied into the project, to commit with it."
 	}
 	return "Linked to the library, and kept out of git."

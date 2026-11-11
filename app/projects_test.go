@@ -72,6 +72,24 @@ func TestAddSkills(t *testing.T) {
 	}
 }
 
+func TestModeHint(t *testing.T) {
+	project := core.Scope{Root: "/web"}
+	for _, tc := range []struct {
+		scope core.Scope
+		mode  int
+		want  string
+	}{
+		{project, 0, "Linked to the library, and kept out of git."},
+		{project, 1, "Copied into the project, to commit with it."},
+		{core.Global, 0, "Linked to the library."},
+		{core.Global, 1, "Copied from the library; Refresh brings in its later changes."},
+	} {
+		if got := modeHint(tc.scope, tc.mode); got != tc.want {
+			t.Errorf("modeHint(%v, %d) = %q, want %q", tc.scope, tc.mode, got, tc.want)
+		}
+	}
+}
+
 func TestRefreshCopies(t *testing.T) {
 	h := newHarness(t)
 	h.add(h.repo("pack", map[string]string{"review": "skills/review"}))
