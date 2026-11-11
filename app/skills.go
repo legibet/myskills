@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/legibet/myskills/internal/core"
+	"github.com/legibet/myskills/internal/skill"
 	"github.com/legibet/myskills/internal/source"
 )
 
@@ -159,7 +160,7 @@ func (a *app) skillDetail(c *ui.Context, sk core.Skill) {
 				a.enabledIn(c, sk)
 			}
 			if d, ok := a.data.docs[sk.Path]; ok {
-				docView(c, d.meta.License, d.meta.Compatibility, d.meta.AllowedTools, d.meta.Metadata, d.body, &a.skills.md)
+				docView(c, d.meta, d.body, &a.skills.md)
 			}
 		})
 	})
@@ -264,11 +265,11 @@ func (a *app) enableInProject(c *ui.Context, g *rowGroup, sk core.Skill) {
 
 // docView shows a SKILL.md: the optional frontmatter fields that are set,
 // then the body, as a document.
-func docView(c *ui.Context, license, compatibility, tools string, meta map[string]string, body string, md *markdown.Options) {
+func docView(c *ui.Context, meta skill.Metadata, body string, md *markdown.Options) {
 	p := colors(c)
-	fields := [][2]string{{"License", license}, {"Compatibility", compatibility}, {"Allowed tools", tools}}
-	for _, k := range slices.Sorted(maps.Keys(meta)) {
-		fields = append(fields, [2]string{k, meta[k]})
+	fields := [][2]string{{"License", meta.License}, {"Compatibility", meta.Compatibility}, {"Allowed tools", meta.AllowedTools}}
+	for _, k := range slices.Sorted(maps.Keys(meta.Metadata)) {
+		fields = append(fields, [2]string{k, meta.Metadata[k]})
 	}
 	fields = slices.DeleteFunc(fields, func(f [2]string) bool { return f[1] == "" })
 	ui.Column(c).Gap(8).Label("SKILL.md").Children(func() {

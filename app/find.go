@@ -682,7 +682,7 @@ func (a *app) findDetail(c *ui.Context, r findRow) {
 			case pv.err != nil:
 				note(c, "Couldn't load SKILL.md: "+pv.err.Error())
 			default:
-				docView(c, pv.meta.License, pv.meta.Compatibility, pv.meta.AllowedTools, pv.meta.Metadata, pv.body, &p.md)
+				docView(c, pv.meta, pv.body, &p.md)
 			}
 		})
 	})
