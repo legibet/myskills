@@ -625,7 +625,7 @@ func (a *app) defaultsModal() {
 	}
 }
 
-// removeModal is x: confirm removing the skill, or its whole linked entry,
+// removeModal is d: confirm removing the skill, or its whole linked entry,
 // from the library.
 func (a *app) removeModal() {
 	r, _ := a.current()
@@ -771,7 +771,7 @@ type checkDoneMsg struct {
 	err    error
 }
 
-// checkUpdates is r: check every updatable skill in the background.
+// checkUpdates is U: check every updatable skill in the background.
 func (a *app) checkUpdates() tea.Cmd {
 	var skills []core.Skill
 	for _, sk := range a.data.lib {
