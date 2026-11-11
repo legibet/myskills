@@ -63,7 +63,7 @@ func Parse(input string) (Spec, error) {
 		return Spec{Kind: Local, Input: s, Path: p}, nil
 	}
 
-	base, ref, hasRef := cutLast(s, "#")
+	base, ref, hasRef := strings.CutLast(s, "#")
 	if hasRef && ref == "" {
 		return Spec{}, fmt.Errorf("empty ref in source %q", s)
 	}
@@ -262,7 +262,7 @@ func parseShorthand(input, s string) (Spec, error) {
 		return Spec{}, unrecognized(input)
 	}
 	var skills []string
-	if base, name, ok := cutLast(s, "@"); ok && !strings.ContainsAny(name, `/\`) {
+	if base, name, ok := strings.CutLast(s, "@"); ok && !strings.ContainsAny(name, `/\`) {
 		if name == "" {
 			return Spec{}, unrecognized(input)
 		}
@@ -333,12 +333,4 @@ func hasPrefixFold(s string, prefixes ...string) bool {
 		}
 	}
 	return false
-}
-
-// cutLast slices s around the last instance of sep.
-func cutLast(s, sep string) (before, after string, found bool) {
-	if before, after, ok := strings.CutLast(s, sep); ok {
-		return before, after, true
-	}
-	return s, "", false
 }
