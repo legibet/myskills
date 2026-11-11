@@ -50,9 +50,9 @@ func (f *Fetched) Close() error {
 
 // Fetch clones a git source (or reads a local folder) and discovers its
 // candidates (docs/library.md), applying Spec.Subdir and Spec.Skills. A name in
-// Skills matching several candidates at its most preferred place is
-// ErrAmbiguous; matching none is ErrNotFound. Of a git source, only the
-// SKILL.md files are checked out; Install checks out the skills it installs.
+// Skills matching several candidates is ErrAmbiguous; matching none is
+// ErrNotFound. Of a git source, only the SKILL.md files are checked out;
+// Install checks out the skills it installs.
 func (s *Service) Fetch(ctx context.Context, spec source.Spec) (*Fetched, error) {
 	f := &Fetched{Spec: spec}
 	switch spec.Kind {
@@ -154,20 +154,21 @@ func (s *Service) discover(f *Fetched) error {
 		return errorf(ErrNotFound, "no skills found in %s", f.Spec.Input)
 	}
 
+	// A source offers a name at its most preferred place only (placeRank).
+	best := map[string]int{}
+	for _, c := range cands {
+		if r, ok := best[c.Name]; !ok || placeRank(c.RelPath) < r {
+			best[c.Name] = placeRank(c.RelPath)
+		}
+	}
+	cands = slices.DeleteFunc(cands, func(c Candidate) bool { return placeRank(c.RelPath) > best[c.Name] })
+
 	if len(f.Spec.Skills) > 0 {
 		var picked []Candidate
 		for _, want := range f.Spec.Skills {
-			// Of the matches, only those at the most preferred place count.
 			var matched []Candidate
-			best := 0
 			for _, c := range cands {
-				if !strings.EqualFold(c.Name, want) && !strings.EqualFold(filepath.Base(c.Dir), want) {
-					continue
-				}
-				switch r := placeRank(c.RelPath); {
-				case len(matched) == 0 || r < best:
-					matched, best = []Candidate{c}, r
-				case r == best:
+				if strings.EqualFold(c.Name, want) || strings.EqualFold(filepath.Base(c.Dir), want) {
 					matched = append(matched, c)
 				}
 			}
@@ -205,8 +206,8 @@ func (s *Service) discover(f *Fetched) error {
 // placeRank orders the places of a skill in a source, most preferred first:
 // skills/, the universal .agents/skills, another agent's skills folder, then
 // anywhere else. A repository serving several agents keeps a copy of its
-// skill in each agent's folder, and a skill named by a skills.sh result or
-// -s takes the copy at the most preferred place (docs/library.md).
+// skill in each agent's folder, and a source offers a skill only at the most
+// preferred of its places (docs/library.md).
 func placeRank(rel string) int {
 	first, rest, _ := strings.Cut(rel, "/")
 	switch {

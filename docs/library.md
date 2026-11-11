@@ -37,6 +37,7 @@ Discovery finds the candidate skills in a fetched repository or a local folder.
 - Otherwise the walk goes down to depth 6, skipping `.git` and `node_modules`. A directory with `SKILL.md` is a candidate and is not descended. Hidden directories are walked, since skills often live in `.claude/skills` or `.agents/skills`.
 - When looking for named skills (`@skill`, `-s`, a skills.sh result), the walk has no depth limit: the name is known, and skills.sh lists skills at any depth without their path.
 - Candidates that resolve to the same real directory count once.
+- Candidates that share a name are offered at the most preferred place only: under `skills/`, then `.agents/skills/`, then another `.<agent>/skills/`, then anywhere else. A repository serving several agents keeps a copy of its skill in each agent's folder, and the universal `.agents/skills` copy is the one that suits a single library copy enabled for every agent. Several at that place are all offered.
 
 ## Sources
 
@@ -75,7 +76,7 @@ skills.sh is used only to search and preview.
 - A skill is installed at `skills/<name>`, so its name must be valid. It is copied into `skills/.incoming-<rand>` with the copy rules, hashed, renamed into place and recorded, all under the mutation lock.
 - When `skills/<name>` exists: from the same source (url, ref and path, or the local path), it is "already in library" and `update` is suggested; from another source, it is a name conflict. Nothing changes either way.
 - A requested name (`@skill`, each `-s`) matches a candidate's frontmatter name or folder name, ignoring case. A name that matches none is a not-found error listing the candidates. A named candidate that is invalid fails with its validation error.
-- A name that matches several candidates takes the one at the most preferred place: under `skills/`, then `.agents/skills/`, then another `.<agent>/skills/`, then anywhere else. A repository serving several agents keeps a copy of its skill in each agent's folder, and the universal `.agents/skills` copy is the one that suits a single library copy enabled for every agent. Several matches at that place are an ambiguity error listing their paths.
+- A name that matches several candidates is an ambiguity error listing their paths.
 - A local folder is copied by default, with the record `{type: local, path: <candidate dir>}`. `--link` instead creates `skills/<basename>` as a symlink to the absolute folder (a skill or a collection), with no record. A local path inside the library is rejected.
 
 ## Updates

@@ -172,7 +172,7 @@ func TestFetchNamedSkillAtAnyDepth(t *testing.T) {
 	}
 }
 
-func TestFetchNamedSkillPrefersPlace(t *testing.T) {
+func TestFetchPrefersPlace(t *testing.T) {
 	e := newEnv(t)
 	dir := e.path("src")
 	gitInit(t, dir)
@@ -207,6 +207,16 @@ func TestFetchNamedSkillPrefersPlace(t *testing.T) {
 	wantErr(t, err, ErrAmbiguous, ".claude/skills/d, .cursor/skills/d")
 	if strings.Contains(err.Error(), "plugin") {
 		t.Errorf("error %q lists a less preferred match", err)
+	}
+
+	f := e.fetch(url)
+	_ = f.Close()
+	var rels []string
+	for _, c := range f.Candidates {
+		rels = append(rels, c.RelPath)
+	}
+	if want := []string{".agents/skills/b", ".claude/skills/c", ".claude/skills/d", ".cursor/skills/d", "skills/a"}; !slices.Equal(rels, want) {
+		t.Errorf("candidates = %v, want %v", rels, want)
 	}
 }
 
@@ -816,6 +826,18 @@ func TestInstallCopyFailureLeavesNothing(t *testing.T) {
 	}
 	if l := leftovers(t, e.svc.paths.Skills); len(l) > 0 {
 		t.Errorf("leftovers: %v", l)
+	}
+}
+
+func TestInstallSourceWithAgentCopies(t *testing.T) {
+	e := newEnv(t)
+	dir := e.path("dev", "multi")
+	writeSkill(t, filepath.Join(dir, "skills", "foo"), "foo", "")
+	writeSkill(t, filepath.Join(dir, ".claude", "skills", "foo"), "foo", "")
+
+	e.add(dir)
+	if got := e.skill("foo").Record.Source.Path; got != filepath.Join(dir, "skills", "foo") {
+		t.Errorf("installed from %s", got)
 	}
 }
 
