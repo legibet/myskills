@@ -23,7 +23,7 @@ None of these files has to exist; a missing file means the defaults.
 ```
 
 - `agents` are the default agents for new enablements. When it is missing, the defaults are `universal` and `claude-code`.
-- A custom agent's id matches `[a-z0-9-]+` and must not collide with a built-in. It needs at least one directory: `project` is relative and has no `..`; `global` is absolute or starts with `~/`.
+- A custom agent's id matches `[a-z0-9][a-z0-9-]*` and must not collide with a built-in. It needs at least one directory: `project` is relative and has no `..`; `global` is absolute or starts with `~/`.
 - An invalid config is an error, and nothing is written.
 
 ## lock.json
@@ -34,7 +34,7 @@ None of these files has to exist; a missing file means the defaults.
   "skills": {
     "swiftui-expert-skill": {
       "source": { "type": "git", "url": "https://github.com/avdlee/swiftui-agent-skill.git",
-                  "ref": "", "path": "swiftui-expert-skill" },
+                  "path": "swiftui-expert-skill" },
       "commit": "3f2c…",
       "hash": "v1:…",
       "installedAt": "2026-10-31T10:00:00Z",
@@ -53,7 +53,7 @@ None of these files has to exist; a missing file means the defaults.
 }
 ```
 
-- `skills` is keyed by library path and records where each skill came from, so that it can be updated. A skill without a record (made by hand, or inside a linked entry) is not updatable. `source.path` is the skill's directory inside the repository, or for a local source the skill directory itself.
+- `skills` is keyed by library path and records where each skill came from, so that it can be updated. A skill without a record (made by hand, or inside a linked entry) is not updatable. `source.path` is the skill's directory inside the repository, or for a local source the skill directory itself. `source.ref` is the branch or tag the skill was added at, and is left out for the default branch.
 - A skill's `hash` is the content hash of what was installed, which is the upstream content. A library skill whose current hash differs has local changes. `commit` is the last upstream commit verified to have that content.
 - `copies` is keyed by the absolute placement path. `hash` is the content of the copy as written, and `libraryHash` the content of the library skill it was copied from, hashed as a copy (see the copy rules in `library.md`). The two can differ, because copying normalizes symlinks and the umask can drop permission bits, so each is compared only with its own side: `hash` with the copy (`modified`), `libraryHash` with the library skill (`outdated`).
 - `projects` lists the project roots where MySkills placed something. It answers where a skill is enabled, and tells agent removal where to clean up. A root is dropped only when it exists and holds no managed placement, so a root on an unmounted disk is kept.

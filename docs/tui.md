@@ -13,7 +13,7 @@
 
 ## Skills view
 
-Rows are every library skill: a glyph, the name, the source label, flags (`outdated`, `modified`, `update`, `invalid`), and a right column saying how the skill is enabled in the active scope: `link`, `copy`, `mixed`, or `global` for a project that gets it only from global scope; `broken`, `conflict` or `unmanaged` when something is wrong. The glyph is `●` link, `◆` copy, `◐` mixed or partial, `○` enabled only globally, `✗` broken or conflict, and none when off, so that what is enabled stands out.
+Rows are every library skill: a glyph, the name, the source label, flags (`outdated`, `modified`, `update`, `invalid`), and a right column saying how the skill is enabled in the active scope: `link`, `copy`, `mixed`, or `global` for a project that gets it only from global scope; `broken`, `conflict` or `unmanaged` when something is wrong. The glyph is `●` link, `◆` copy, `◐` mixed or partial, `○` enabled only globally, `✗` broken or conflict, `◇` an unmanaged entry, and none when off, so that what is enabled stands out.
 
 - `space`: enables a skill that is off as a link for the default agents, and disables an enabled one.
 - `c`: enables a skill that is off as a copy, converts a link or mixed enablement to copies, and converts copies to links.

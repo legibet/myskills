@@ -97,10 +97,10 @@ skills.sh is used only to search and preview.
 
 ## Removing
 
-`remove` removes the owning entries of the named skills, and the link placements pointing into them in every known scope. Their copies stay as unmanaged files, and their records are dropped. The CLI confirms in a terminal and needs `-y` otherwise.
+`remove` deletes the folder of each named skill and the collection folders that this leaves empty. A skill behind a symlink in the library (a linked entry, or a link inside a collection) is removed by removing that symlink, with every skill behind it; the files the symlink points to stay. The link placements of the removed skills are removed in every known scope. Their copies stay as unmanaged files, and their records are dropped. The CLI confirms in a terminal and needs `-y` otherwise.
 
 ## Names and labels
 
-A skill is shown by its name. When several library skills share that name, the folder of its library path follows it, dimmed (`review a`); a top-level skill has no folder to show. The CLI, the TUI and the desktop app all follow this.
+A skill is shown by its name. When several library skills share that name, the folder of its library path follows it, dimmed (`review a`); a top-level skill has no folder to show. The lists of the CLI, the TUI and the desktop app all follow this. The CLI's result lines (`added`, `linked`, `updated`, `removed` and the like) print the library path, which is the reference the next command takes.
 
 A skill's source label is `owner/repo` for git, the linked folder (`~/agent-skills`) for a skill inside a linked entry, and `local` otherwise. `myskills show` and the TUI preview show the folder of a local source instead of `local`.
