@@ -417,8 +417,7 @@ func (a *app) loadPreview(res skillssh.Result) {
 // and the library skill it is for Added and In Library.
 func (a *app) rowState(r findRow) (state, path string) {
 	if path := a.find.added[r.key()]; path != "" {
-		// Until the read after the add completes, the library lacks it.
-		if _, ok := a.data.skill(path); ok || a.loading {
+		if _, ok := a.data.skill(path); ok {
 			return stateAdded, path
 		}
 	}
