@@ -673,7 +673,7 @@ func (a *app) removeModal() {
 		if n := len(res.Unlinked); n > 0 {
 			line += ", " + plural(n, "link", "links") + " removed"
 		}
-		out := outcome{lines: []string{line}}
+		out := outcome{lines: []string{line}, warnings: res.Warnings}
 		if n := len(res.Released); n > 0 {
 			out.warnings = append(out.warnings, plural(n, "copy", "copies")+" left in place as unmanaged files")
 		}

@@ -60,6 +60,7 @@ type fakeService struct {
 	markdown map[string]string
 	fetched  map[string]*core.Fetched // by spec input
 	checks   []core.UpdateCheck
+	warnings []string // what Remove warns about
 }
 
 func newFake() *fakeService {
@@ -167,7 +168,7 @@ func (f *fakeService) Remove(sk core.Skill) (core.RemoveResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.lib = slices.DeleteFunc(f.lib, func(s core.Skill) bool { return s.Path == sk.Path })
-	return core.RemoveResult{Entry: sk.Entry, Skills: []string{sk.Path}}, nil
+	return core.RemoveResult{Entry: sk.Entry, Skills: []string{sk.Path}, Warnings: f.warnings}, nil
 }
 
 func (f *fakeService) CheckUpdates(_ context.Context, skills []core.Skill, progress func(done, total int)) (*core.Updates, error) {

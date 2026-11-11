@@ -361,6 +361,16 @@ func TestRemoveLinkedEntry(t *testing.T) {
 	h.contains("Removed the linked entry agent-skills")
 }
 
+func TestRemoveShowsWarnings(t *testing.T) {
+	f := libraryFixture()
+	f.warnings = []string{"could not update the git exclude"}
+	h := newHarness(t, f, projectOptions(), 120, 30)
+	h.cursorTo("tdd")
+	h.press("d")
+	h.press("y")
+	h.contains("Removed tdd from the library", "could not update the git exclude")
+}
+
 func TestCheckAndUpdate(t *testing.T) {
 	f := libraryFixture()
 	f.checks = []core.UpdateCheck{
