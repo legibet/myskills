@@ -223,7 +223,7 @@ func (a *app) update(ctx context.Context, refs []string, force bool) error {
 	switch {
 	case skipped:
 		a.failed = true
-		a.note("Use --force to overwrite the local changes.")
+		a.eprintln(dim("Use --force to overwrite the local changes."))
 	case quiet && !a.failed:
 		a.ok("Everything is up to date.")
 	}

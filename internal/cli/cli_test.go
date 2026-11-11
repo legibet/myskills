@@ -691,7 +691,8 @@ func TestCheckAndUpdate(t *testing.T) {
 	writeSkill(t, filepath.Join(src, "lint"), "lint", "new body")
 	commitAll(t, src)
 	r = e.fails(proj, "update", "lint")
-	contains(t, r.out, "! lint has local changes", "Use --force to overwrite the local changes.")
+	contains(t, r.out, "! lint has local changes")
+	contains(t, r.err, "Use --force to overwrite the local changes.")
 	r = e.ok(proj, "update", "lint", "--force")
 	contains(t, r.out, "✓ updated lint")
 }
@@ -707,7 +708,8 @@ func TestUpdateSkipsModifiedCopy(t *testing.T) {
 	commitAll(t, src)
 
 	r := e.fails(proj, "update")
-	contains(t, r.out, "✓ updated tdd", filepath.FromSlash("! .agents/skills/tdd: modified locally, so not refreshed"), "Use --force")
+	contains(t, r.out, "✓ updated tdd", filepath.FromSlash("! .agents/skills/tdd: modified locally, so not refreshed"))
+	contains(t, r.err, "Use --force to overwrite the local changes.")
 	if strings.Contains(r.out, "already copied") {
 		t.Errorf("skipped copy reported as fine:\n%s", r.out)
 	}
