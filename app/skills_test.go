@@ -113,16 +113,23 @@ func TestDisableModifiedCopyDiscards(t *testing.T) {
 	h := newHarness(t)
 	h.add(h.repo("pack", map[string]string{"review": "skills/review"}))
 	proj := h.project("web")
-	h.enable(proj, "review", core.EnableOptions{Mode: core.Copy})
-	copied := h.status(proj).Enablements[0].Placements[0].Path
-	writeFile(t, filepath.Join(copied, "notes.md"), "mine")
+	h.enable(proj, "review", core.EnableOptions{Mode: core.Copy, Agents: []string{"universal", "claude-code"}})
+	pls := h.status(proj).Enablements[0].Placements
+	modified, kept := pls[0].Path, pls[1].Path
+	writeFile(t, filepath.Join(modified, "notes.md"), "mine")
 	h.start()
 	h.want("Modified")
 
 	h.click("Disable in web")
-	h.confirm("Discard local changes?")
-	if _, err := os.Stat(copied); !os.IsNotExist(err) {
-		t.Fatalf("modified copy left: %v", err)
+	h.wantAlert("Disable review in web?")
+	if msg, want := h.a.alerts[0].message, "This deletes the copied files:\n"+tilde(modified)+" (local changes will be lost)\n"+tilde(kept); msg != want {
+		t.Errorf("message = %q, want %q", msg, want)
+	}
+	h.confirm("Disable review in web?")
+	for _, p := range []string{modified, kept} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("copy %s left: %v", p, err)
+		}
 	}
 }
 

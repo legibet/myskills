@@ -173,15 +173,17 @@ func (a *app) confirmCopies(copies []core.Placement, title, action string, fn fu
 		fn(false)
 		return
 	}
-	if lost := lossText(copies); lost != "" {
-		a.ask("Discard local changes?", lost, "Discard", func() { fn(true) })
-		return
-	}
 	var lines []string
+	modified := false
 	for _, p := range copies {
-		lines = append(lines, tilde(p.Path))
+		line := tilde(p.Path)
+		if p.Modified {
+			line += " (local changes will be lost)"
+			modified = true
+		}
+		lines = append(lines, line)
 	}
-	a.ask(title, "This deletes the copied files:\n"+strings.Join(lines, "\n"), action, func() { fn(false) })
+	a.ask(title, "This deletes the copied files:\n"+strings.Join(lines, "\n"), action, func() { fn(modified) })
 }
 
 // lossText lists the modified copies among placements, whose changes a
