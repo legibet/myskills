@@ -31,7 +31,7 @@ MySkills manages agent skills (folders with a `SKILL.md`). Skills live in a priv
 
 - Tests isolate state with a temp `HOME` (and `USERPROFILE`, which Windows reads instead) and `MYSKILLS_HOME`.
 - Git sources are local repositories over `file://`. The core and git tests serve them as partial clones (`uploadpack.allowFilter` in the temp home's `.gitconfig`); the tests of the frontends get full clones, with the same result. skills.sh is an `httptest` server; its base URL is injectable.
-- CI runs the tests on Linux, macOS and Windows. Core and the CLI are tested on Windows; the TUI and the desktop app ship there but have not been run. Tests of permission bits, or of names Windows cannot have, skip on Windows.
+- CI runs the tests on Linux, macOS and Windows, and `make lint` on Linux. Core and the CLI are tested on Windows; the TUI and the desktop app ship there but have not been run. Tests of permission bits, or of names Windows cannot have, skip on Windows.
 
 ## Docs
 
