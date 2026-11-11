@@ -861,6 +861,11 @@ func TestStatusOthersAndHidden(t *testing.T) {
 	writeFile(t, filepath.Join(dir, "README.md"), "x")
 	writeFile(t, filepath.Join(dir, ".DS_Store"), "x")
 	symlink(t, e.path("elsewhere"), filepath.Join(dir, "foreign"))
+	rel, err := filepath.Rel(dir, e.libDir("alpha"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	symlink(t, rel, filepath.Join(dir, "relative"))
 
 	st := e.status(sc)
 	var names []string
@@ -870,7 +875,7 @@ func TestStatusOthersAndHidden(t *testing.T) {
 			t.Errorf("other %+v", p)
 		}
 	}
-	if !slices.Equal(names, []string{"README.md", "foreign", "handmade"}) {
+	if !slices.Equal(names, []string{"README.md", "foreign", "handmade", "relative"}) {
 		t.Errorf("others = %v", names)
 	}
 }

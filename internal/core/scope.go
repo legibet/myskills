@@ -347,9 +347,6 @@ func (s *Service) classify(lock *store.Lock, d *agentDir, name string) (Placemen
 			return p, err
 		}
 		p.target = target
-		if !filepath.IsAbs(target) {
-			target = filepath.Join(d.real, target)
-		}
 		lib, ok := s.libraryPath(target)
 		if !ok {
 			return p, nil
@@ -375,8 +372,12 @@ func (s *Service) classify(lock *store.Lock, d *agentDir, name string) (Placemen
 
 // libraryPath returns the library path of an absolute link target when it
 // lies inside the library, checked lexically against the library root and its
-// resolved form.
+// resolved form. A relative target is never a library path, because myskills
+// only makes absolute links (docs/enabling.md).
 func (s *Service) libraryPath(target string) (string, bool) {
+	if !filepath.IsAbs(target) {
+		return "", false
+	}
 	target = filepath.Clean(target)
 	for _, root := range []string{s.paths.Skills, realPath(s.paths.Skills)} {
 		if rel, ok := within(root, target); ok {
