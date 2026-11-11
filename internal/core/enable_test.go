@@ -600,6 +600,34 @@ func TestDisableRechecksCopiesBeforeRemoving(t *testing.T) {
 	}
 }
 
+func TestDisableKeepsNestedProjectCopies(t *testing.T) {
+	e := setup(t)
+	app := e.project(filepath.Join("parent", "app"), false)
+	parent := e.project("parent", false)
+	e.enable(app, "alpha", EnableOptions{Mode: Copy})
+	e.enable(parent, "alpha", EnableOptions{})
+	if _, err := e.svc.Disable(parent, "alpha", DisableOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	lock := e.lock()
+	if !slices.Equal(lock.Projects, []string{app.Root}) {
+		t.Errorf("projects = %v", lock.Projects)
+	}
+	for _, key := range []string{
+		filepath.Join(app.Root, ".agents", "skills", "alpha"),
+		filepath.Join(app.Root, ".claude", "skills", "alpha"),
+	} {
+		if _, ok := lock.Copies[key]; !ok {
+			t.Errorf("the record of %s was dropped", key)
+		}
+	}
+	st := e.status(app)
+	if len(st.Enablements) != 1 || st.Enablements[0].Mode != Copy || len(st.Others) != 0 {
+		t.Errorf("status = %+v", st)
+	}
+}
+
 func TestDisableBrokenByPathWithAmbiguousName(t *testing.T) {
 	e := setup(t)
 	sc := e.project("proj", false)

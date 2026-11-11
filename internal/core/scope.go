@@ -411,15 +411,19 @@ func (s *Service) holdsPlacements(st *state, root string) bool {
 }
 
 // pruneProjects forgets the given project roots, or all known ones when roots
-// is nil, that hold no placement anymore, along with their stale copy records.
+// is nil, that hold no placement anymore, along with the stale copy records
+// of their agent directories.
 func (s *Service) pruneProjects(st *state, roots ...string) {
 	st.lock.Projects = slices.DeleteFunc(st.lock.Projects, func(root string) bool {
 		if roots != nil && !slices.Contains(roots, root) || s.holdsPlacements(st, root) {
 			return false
 		}
-		for key := range st.lock.Copies {
-			if _, ok := within(root, key); ok {
-				delete(st.lock.Copies, key)
+		// Not every record below the root: a project inside it keeps its own.
+		for _, d := range agentDirs(st.agents, Scope{Root: root}) {
+			for key := range st.lock.Copies {
+				if slices.Contains(d.aliases, filepath.Dir(key)) {
+					delete(st.lock.Copies, key)
+				}
 			}
 		}
 		return true

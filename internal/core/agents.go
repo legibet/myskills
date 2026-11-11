@@ -130,7 +130,7 @@ func (s *Service) RemoveAgent(id string) ([]string, error) {
 				}
 				// Release the copies: the files stay, unmanaged.
 				for key := range st.lock.Copies {
-					if slices.ContainsFunc(d.aliases, func(alias string) bool { return filepath.Dir(key) == alias }) {
+					if slices.Contains(d.aliases, filepath.Dir(key)) {
 						delete(st.lock.Copies, key)
 					}
 				}
