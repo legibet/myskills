@@ -321,6 +321,9 @@ func (a *app) start(o op, force bool) {
 		return
 	}
 	a.busy[o.key] = true
+	// busySince may still hold the time a frame first showed earlier work on
+	// the key; the delay starts again with this work.
+	delete(a.busySince, o.key)
 	a.work.Go(func() {
 		out := o.run(force)
 		a.post(func() {
@@ -357,7 +360,6 @@ const busyDelay = 300 * time.Millisecond
 // has been for busyDelay.
 func (a *app) working(c *ui.Context, key string) bool {
 	if !a.busy[key] {
-		delete(a.busySince, key)
 		return false
 	}
 	now := c.Now()
