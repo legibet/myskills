@@ -20,13 +20,13 @@ func (a *app) placementRow(c *ui.Context, g *rowGroup, p *place, sk core.Skill, 
 	g.row(c.Key(p.scope.Root + "\x00" + sk.Path)).Wrap().Justify(ui.End).GapX(10).GapY(8).Children(func() {
 		ui.Row(c).Grow(1).Basis(200).MinWidth(0).Gap(10).AlignItems(ui.Center).Children(lead)
 		ui.Row(c).MinWidth(0).Shrink(1).Wrap().Justify(ui.End).Gap(6).AlignItems(ui.Center).Children(func() {
-			if outdated(e) {
+			if e.Outdated() {
 				tag(c, "Outdated", t.Warning).Tooltip("The library changed since these files were copied")
 				button(c, "Refresh", plain).MinHeight(24).Padding(3, 10).FontSize(textSmall(c)).Disabled(busy).OnClick(func() {
 					a.start(a.refresh(p.scope, []string{sk.Path}, sk.Path, "Couldn't refresh the copies of "+sk.Name), false)
 				})
 			}
-			if modified(e) {
+			if e.Modified() {
 				tag(c, "Modified", t.Warning).Tooltip("The copied files were edited in place")
 			}
 			a.modeChip(c, p, sk, e, busy)
@@ -72,7 +72,7 @@ func (a *app) modeChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablemen
 func (a *app) agentsChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablement, busy bool) {
 	key := p.scope.Root + "\x00" + sk.Path
 	open := a.agentsOpen && a.agentsFor == key
-	b := popUp(c, "Agents", a.agentsSummary(placedAgents(e))).Tooltip(a.data.agentNames(placedAgents(e))).
+	b := popUp(c, "Agents", a.agentsSummary(e.Agents())).Tooltip(a.data.agentNames(e.Agents())).
 		MaxWidth(200).Shrink(0).Expanded(open).Disabled(busy)
 	if b.Clicked() {
 		a.agentsOpen, a.agentsFor = !open, key
@@ -117,28 +117,6 @@ func (a *app) agentsSummary(ids []string) string {
 	return fmt.Sprintf("%s +%d", a.data.agentName(ids[0]), len(ids)-1)
 }
 
-// placedAgents returns the agents that have a placement of the enablement,
-// in agent order.
-func placedAgents(e *core.Enablement) []string {
-	var ids []string
-	for _, p := range e.Placements {
-		for _, id := range p.Agents {
-			if !slices.Contains(ids, id) {
-				ids = append(ids, id)
-			}
-		}
-	}
-	return ids
-}
-
-func outdated(e *core.Enablement) bool {
-	return slices.ContainsFunc(e.Placements, func(p core.Placement) bool { return p.Outdated })
-}
-
-func modified(e *core.Enablement) bool {
-	return slices.ContainsFunc(e.Placements, func(p core.Placement) bool { return p.Modified })
-}
-
 // enable enables a skill in a place: as a link for the default agents when
 // it is new, else for the agents and in the mode opts says.
 func (a *app) enable(sc core.Scope, sk core.Skill, opts core.EnableOptions) {
@@ -168,7 +146,7 @@ func (a *app) disable(sc core.Scope, sk core.Skill, e *core.Enablement, agents [
 // convert switches an enablement to links or to copies, for the agents it is
 // placed for. Switching to links deletes the copies, after asking.
 func (a *app) convert(sc core.Scope, sk core.Skill, e *core.Enablement, mode core.Mode) {
-	opts := core.EnableOptions{Mode: mode, Agents: placedAgents(e)}
+	opts := core.EnableOptions{Mode: mode, Agents: e.Agents()}
 	run := func(force bool) {
 		a.start(op{key: sk.Path, fail: "Couldn't switch " + sk.Name + " in " + placeName(sc), run: func(f bool) outcome {
 			opts.Force = f

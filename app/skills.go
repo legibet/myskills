@@ -322,8 +322,8 @@ func (a *app) badges(sk core.Skill) []badge {
 	var copiesOutdated, copiesModified bool
 	for _, p := range a.data.usedIn(sk.Path) {
 		e, _ := p.enablement(sk.Path)
-		copiesOutdated = copiesOutdated || outdated(e)
-		copiesModified = copiesModified || modified(e)
+		copiesOutdated = copiesOutdated || e.Outdated()
+		copiesModified = copiesModified || e.Modified()
 	}
 	if copiesOutdated {
 		out = append(out, badge{"Outdated", warn})
@@ -480,7 +480,7 @@ func (a *app) update(sk core.Skill) {
 		if hasCopies([]*place{p}, sk.Path) {
 			places = append(places, p.scope)
 			e, _ := p.enablement(sk.Path)
-			stale = stale || outdated(e)
+			stale = stale || e.Outdated()
 		}
 	}
 	var copies func(i int)

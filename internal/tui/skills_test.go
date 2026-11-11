@@ -652,7 +652,7 @@ func TestAddingAgentsNeverConfirms(t *testing.T) {
 func TestRemovingAgentsConfirmsOnlyTheirCopies(t *testing.T) {
 	f := libraryFixture()
 	st := f.status[project]
-	st.Enablements[0].Partial = false
+	st.Enablements[0].Missing = nil
 	st.Enablements[0].Placements = []core.Placement{
 		{Path: "/work/proj/.agents/skills/notes", Name: "notes", Agents: []string{"universal", "antigravity"}, Kind: core.KindCopy, Skill: "notes", Modified: true},
 		{Path: "/work/proj/.claude/skills/notes", Name: "notes", Agents: []string{"claude-code"}, Kind: core.KindCopy, Skill: "notes", Modified: true},

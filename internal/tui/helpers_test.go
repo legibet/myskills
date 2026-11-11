@@ -427,7 +427,7 @@ func libraryFixture() *fakeService {
 		Enablements: []core.Enablement{
 			{Skill: "notes", Name: "notes", Mode: core.Copy, Placements: []core.Placement{
 				{Path: "/work/proj/.claude/skills/notes", Name: "notes", Agents: []string{"claude-code"}, Kind: core.KindCopy, Skill: "notes", Modified: true},
-			}, Partial: true},
+			}, Missing: []string{"universal"}},
 			{Skill: "tdd", Name: "tdd", Mode: core.Link, Placements: []core.Placement{
 				{Path: "/work/proj/.agents/skills/tdd", Name: "tdd", Agents: []string{"universal", "antigravity"}, Kind: core.KindLink, Skill: "tdd"},
 				{Path: "/work/proj/.claude/skills/tdd", Name: "tdd", Agents: []string{"claude-code"}, Kind: core.KindLink, Skill: "tdd"},

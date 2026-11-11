@@ -76,4 +76,4 @@ Status classifies every entry of every known agent directory (built-in and custo
 - `copy`: a real directory recorded in `copies`, flagged `modified` when its hash differs from `hash`, and `outdated` when the library skill hashed as a copy differs from `libraryHash`.
 - `other`: anything else. It is shown and never touched.
 
-Per skill, status gives the placements, their agents, the mode (`link`, `copy` or `mixed`), and `partial` when a default agent that supports the scope has no placement.
+Per skill, status gives the placements, their agents, the mode (`link`, `copy` or `mixed`), and the default agents that support the scope and have no placement; the enablement is `partial` when there are any.

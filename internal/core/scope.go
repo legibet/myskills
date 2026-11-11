@@ -124,7 +124,33 @@ type Enablement struct {
 	Name       string
 	Mode       Mode
 	Placements []Placement
-	Partial    bool // a default agent that supports the scope has no placement
+	// Missing lists the default agents that support the scope and have no
+	// placement, in default-agent order. The enablement is partial when it is
+	// not empty.
+	Missing []string
+}
+
+// Agents returns the agents the skill is placed for, in placement order.
+func (e Enablement) Agents() []string {
+	var ids []string
+	for _, p := range e.Placements {
+		for _, id := range p.Agents {
+			if !slices.Contains(ids, id) {
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids
+}
+
+// Outdated reports whether the library changed since a copy was made.
+func (e Enablement) Outdated() bool {
+	return slices.ContainsFunc(e.Placements, func(p Placement) bool { return p.Outdated })
+}
+
+// Modified reports whether a copy was changed in place.
+func (e Enablement) Modified() bool {
+	return slices.ContainsFunc(e.Placements, func(p Placement) bool { return p.Modified })
 }
 
 // Status is everything found in a scope's agent skill directories.
@@ -169,7 +195,7 @@ func (s *Service) Status(sc Scope) (Status, error) {
 	}
 	for _, e := range enabled {
 		e.Mode = modeOf(e.Placements)
-		e.Partial = partial(st, sc, e.Placements)
+		e.Missing = missing(st, sc, e.Placements)
 		status.Enablements = append(status.Enablements, *e)
 	}
 	slices.SortFunc(status.Enablements, func(a, b Enablement) int {
@@ -193,9 +219,10 @@ func modeOf(placements []Placement) Mode {
 	return mode
 }
 
-// partial reports whether a default agent with a skill directory in the scope
-// has none of the placements. Agents sharing a directory share its placements.
-func partial(st *state, sc Scope, placements []Placement) bool {
+// missing returns the default agents with a skill directory in the scope that
+// have none of the placements. Agents sharing a directory share its placements.
+func missing(st *state, sc Scope, placements []Placement) []string {
+	var ids []string
 	for _, id := range st.cfg.DefaultAgents() {
 		a, ok := agent.Find(st.agents, id)
 		if !ok {
@@ -205,10 +232,10 @@ func partial(st *state, sc Scope, placements []Placement) bool {
 			continue
 		}
 		if !slices.ContainsFunc(placements, func(p Placement) bool { return slices.Contains(p.Agents, id) }) {
-			return true
+			ids = append(ids, id)
 		}
 	}
-	return false
+	return ids
 }
 
 // Usage maps library paths to the scopes where they are enabled: global and

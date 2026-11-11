@@ -58,8 +58,11 @@ func TestEnableLinkInGitProject(t *testing.T) {
 		t.Fatalf("status = %+v", st)
 	}
 	en := st.Enablements[0]
-	if en.Skill != "alpha" || en.Name != "alpha" || en.Mode != Link || en.Partial || len(en.Placements) != 2 {
+	if en.Skill != "alpha" || en.Name != "alpha" || en.Mode != Link || len(en.Missing) != 0 || len(en.Placements) != 2 {
 		t.Errorf("enablement = %+v", en)
+	}
+	if !slices.Equal(en.Agents(), []string{"universal", "antigravity", "claude-code"}) || en.Outdated() || en.Modified() {
+		t.Errorf("agents = %v, outdated = %v, modified = %v", en.Agents(), en.Outdated(), en.Modified())
 	}
 	if p := en.Placements[0]; p.Kind != KindLink || !slices.Equal(p.Agents, []string{"universal", "antigravity"}) {
 		t.Errorf("placement = %+v", p)
@@ -368,7 +371,7 @@ func TestParentSymlinkedAgentDirs(t *testing.T) {
 		t.Fatalf("changes = %+v", res.Changes)
 	}
 	st := e.status(sc)
-	if len(st.Enablements) != 1 || st.Enablements[0].Partial || len(st.Enablements[0].Placements) != 1 {
+	if len(st.Enablements) != 1 || len(st.Enablements[0].Missing) != 0 || len(st.Enablements[0].Placements) != 1 {
 		t.Fatalf("status = %+v", st)
 	}
 	if got := st.Enablements[0].Placements[0].Agents; !slices.Equal(got, []string{"universal", "claude-code", "antigravity"}) {
@@ -675,8 +678,12 @@ func TestCopyOutdatedAgainstLibraryContent(t *testing.T) {
 	}
 
 	writeFile(t, filepath.Join(e.libDir("alpha"), "x"), "x v2")
-	if p := e.status(sc).Enablements[0].Placements[0]; !p.Outdated || p.Modified {
+	en := e.status(sc).Enablements[0]
+	if p := en.Placements[0]; !p.Outdated || p.Modified {
 		t.Errorf("after a library change: %+v", p)
+	}
+	if !en.Outdated() || en.Modified() {
+		t.Errorf("enablement after a library change: outdated = %v, modified = %v", en.Outdated(), en.Modified())
 	}
 }
 
@@ -718,7 +725,7 @@ func TestDisableLimitedToAgents(t *testing.T) {
 		t.Fatalf("disable = %+v, %v", res, err)
 	}
 	st := e.status(sc)
-	if len(st.Enablements) != 1 || !st.Enablements[0].Partial {
+	if len(st.Enablements) != 1 || !slices.Equal(st.Enablements[0].Missing, []string{"claude-code"}) {
 		t.Errorf("status = %+v", st)
 	}
 	_, err = e.svc.Disable(sc, "alpha", DisableOptions{Agents: []string{"nope"}})

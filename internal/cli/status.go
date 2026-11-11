@@ -150,20 +150,6 @@ func (a *app) printStatus(st core.Status, dup map[string]bool) {
 	a.println(table("  ", rows))
 }
 
-// placementAgents returns the agents of placements, in order, without
-// duplicates.
-func placementAgents(ps []core.Placement) []string {
-	ids := []string{}
-	for _, p := range ps {
-		for _, id := range p.Agents {
-			if !slices.Contains(ids, id) {
-				ids = append(ids, id)
-			}
-		}
-	}
-	return ids
-}
-
 func newScopeJSON(st core.Status) scopeJSON {
 	out := scopeJSON{
 		Root:        st.Scope.Root,
@@ -172,19 +158,16 @@ func newScopeJSON(st core.Status) scopeJSON {
 		Others:      newPlacementsJSON(st.Others),
 	}
 	for _, e := range st.Enablements {
-		ej := enablementJSON{
+		out.Enablements = append(out.Enablements, enablementJSON{
 			Skill:      e.Skill,
 			Name:       e.Name,
 			Mode:       string(e.Mode),
-			Agents:     placementAgents(e.Placements),
-			Partial:    e.Partial,
+			Agents:     e.Agents(),
+			Partial:    len(e.Missing) > 0,
+			Outdated:   e.Outdated(),
+			Modified:   e.Modified(),
 			Placements: newPlacementsJSON(e.Placements),
-		}
-		for _, p := range e.Placements {
-			ej.Outdated = ej.Outdated || p.Outdated
-			ej.Modified = ej.Modified || p.Modified
-		}
-		out.Enablements = append(out.Enablements, ej)
+		})
 	}
 	return out
 }

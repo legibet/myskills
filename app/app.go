@@ -237,7 +237,7 @@ func (d *data) usedIn(path string) []*place {
 func (p *place) attention() int {
 	n := len(p.status.Broken)
 	for _, e := range p.status.Enablements {
-		if slices.ContainsFunc(e.Placements, func(pl core.Placement) bool { return pl.Outdated || pl.Modified }) {
+		if e.Outdated() || e.Modified() {
 			n++
 		}
 	}

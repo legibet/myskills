@@ -111,7 +111,7 @@ func (r row) hasIssue() bool {
 	if r.skill.Issue != "" || len(r.broken) > 0 || len(r.others) > 0 {
 		return true
 	}
-	return r.en != nil && slices.ContainsFunc(r.en.Placements, func(p core.Placement) bool { return p.Modified })
+	return r.en != nil && r.en.Modified()
 }
 
 // copies returns the copy placements of the row, limited to placements of
@@ -445,10 +445,10 @@ func (a *app) toggleCopy() tea.Cmd {
 	case r.en == nil:
 		return a.start(a.enableOp(r, core.EnableOptions{Mode: core.Copy}, "Enabled %s (copy)"), false)
 	case r.en.Mode == core.Copy:
-		m := a.enableOp(r, core.EnableOptions{Mode: core.Link, Agents: placedIDs(r.en)}, "Switched %s to links")
+		m := a.enableOp(r, core.EnableOptions{Mode: core.Link, Agents: r.en.Agents()}, "Switched %s to links")
 		return a.confirmCopies(r, m, r.copies(nil), "Replace the copies of "+sanitize.Line(r.skill.Name)+" with links?", "Replace")
 	}
-	return a.start(a.enableOp(r, core.EnableOptions{Mode: core.Copy, Agents: placedIDs(r.en)}, "Switched %s to copies"), false)
+	return a.start(a.enableOp(r, core.EnableOptions{Mode: core.Copy, Agents: r.en.Agents()}, "Switched %s to copies"), false)
 }
 
 // confirmCopies runs m after asking, when it deletes copies.
@@ -922,44 +922,6 @@ func (a *app) namesOf(ids []string) []string {
 	return out
 }
 
-// placedIDs returns the ids of the agents an enablement is placed for.
-func placedIDs(e *core.Enablement) []string {
-	var ids []string
-	for _, p := range e.Placements {
-		for _, id := range p.Agents {
-			if !slices.Contains(ids, id) {
-				ids = append(ids, id)
-			}
-		}
-	}
-	return ids
-}
-
-// placedAgents returns the display names of the agents of an enablement.
-func (a *app) placedAgents(e *core.Enablement) []string {
-	return a.namesOf(placedIDs(e))
-}
-
-// missingAgents returns the default agents with a directory in the active
-// scope that lack a placement of the enablement (why it is partial).
-func (a *app) missingAgents(e *core.Enablement) []string {
-	have := map[string]bool{}
-	for _, p := range e.Placements {
-		for _, id := range p.Agents {
-			have[id] = true
-		}
-	}
-	var missing []string
-	for _, d := range a.data.dirs[a.scope] {
-		for _, id := range d.Agents {
-			if slices.Contains(a.data.config.DefaultAgents(), id) && !have[id] {
-				missing = append(missing, id)
-			}
-		}
-	}
-	return a.namesOf(missing)
-}
-
 // placeLabel shows a placement relative to the project, or with ~ outside it.
 func (a *app) placeLabel(p core.Placement) string {
 	if a.opts.Project == nil {
@@ -1202,7 +1164,7 @@ func (a *app) glyph(r row) (string, lipgloss.Style) {
 		return "✗", t.bad
 	case r.entry != nil:
 		return "◇", t.hint
-	case r.en != nil && (r.en.Mode == core.Mixed || r.en.Partial):
+	case r.en != nil && (r.en.Mode == core.Mixed || len(r.en.Missing) > 0):
 		return "◐", t.warn
 	case r.en != nil && r.en.Mode == core.Copy:
 		return "◆", t.accented
@@ -1243,10 +1205,10 @@ func (a *app) badges(r row) []seg {
 	t := a.th
 	var out []seg
 	add := func(text string, st lipgloss.Style) { out = append(out, seg{text: text, style: st}) }
-	if r.en != nil && slices.ContainsFunc(r.en.Placements, func(p core.Placement) bool { return p.Outdated }) {
+	if r.en != nil && r.en.Outdated() {
 		add("outdated", t.warn)
 	}
-	if r.skill.Modified || r.en != nil && slices.ContainsFunc(r.en.Placements, func(p core.Placement) bool { return p.Modified }) {
+	if r.skill.Modified || r.en != nil && r.en.Modified() {
 		add("modified", t.warn)
 	}
 	if a.sk.updates[r.skill.Path].State == core.Available {
@@ -1330,8 +1292,8 @@ func (a *app) stateLine(r row) string {
 	case r.en != nil:
 		glyph, gs := a.glyph(r)
 		line := gs.Render(glyph) + " " + t.text.Render(string(r.en.Mode)) + dot +
-			t.dim.Render(strings.Join(a.placedAgents(r.en), ", "))
-		if missing := a.missingAgents(r.en); len(missing) > 0 {
+			t.dim.Render(strings.Join(a.namesOf(r.en.Agents()), ", "))
+		if missing := a.namesOf(r.en.Missing); len(missing) > 0 {
 			line += dot + t.warn.Render("not in "+strings.Join(missing, ", "))
 		}
 		return line
