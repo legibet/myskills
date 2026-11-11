@@ -602,6 +602,8 @@ func (a *app) confirmRemove(sk core.Skill) {
 				out.warnings = append(out.warnings, fmt.Sprintf("%d %s left in place as unmanaged files", n, plural(n, "copy", "copies")))
 			}
 			return out
+		}, then: func() {
+			delete(a.updates.checks, sk.Path)
 		}}, false)
 	})
 }

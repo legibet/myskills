@@ -230,7 +230,10 @@ func TestRemoveFromLibrary(t *testing.T) {
 	h := newHarness(t)
 	h.add(h.repo("pack", map[string]string{"review": "skills/review", "tdd": "skills/tdd"}))
 	h.enable(core.Global, "review", core.EnableOptions{})
+	writeSkill(t, h.path("pack", "skills", "review"), "review", "Use review.", "The new body.")
+	commitAll(t, h.path("pack"))
 	h.start()
+	h.click("Check for Updates")
 
 	h.click("Remove from Library…")
 	h.wantAlert("Remove review from the library?")
@@ -243,6 +246,9 @@ func TestRemoveFromLibrary(t *testing.T) {
 	}
 	if got := h.enabled(core.Global); len(got) != 0 {
 		t.Errorf("global = %v, want nothing", got)
+	}
+	if n := h.a.updates.available(); n != 0 {
+		t.Errorf("available = %d, want 0", n)
 	}
 	h.want("tdd")
 }
