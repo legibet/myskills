@@ -249,8 +249,3 @@ func sameURL(a, b string) bool {
 	}
 	return norm(a) == norm(b)
 }
-
-// underPath reports whether the library path p is prefix or lies below it.
-func underPath(p, prefix string) bool {
-	return p == prefix || strings.HasPrefix(p, prefix+"/")
-}

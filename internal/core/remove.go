@@ -36,17 +36,17 @@ func (s *Service) Remove(sk Skill) (RemoveResult, error) {
 			return err
 		}
 		for _, l := range lib {
-			if underPath(l.Path, res.Entry) {
+			if under(l.Path, res.Entry) {
 				res.Skills = append(res.Skills, l.Path)
 			}
 		}
 		for p := range st.lock.Skills {
-			if underPath(p, res.Entry) {
+			if under(p, res.Entry) {
 				delete(st.lock.Skills, p)
 			}
 		}
 		for p, rec := range st.lock.Copies {
-			if underPath(rec.Skill, res.Entry) {
+			if under(rec.Skill, res.Entry) {
 				delete(st.lock.Copies, p)
 				res.Released = append(res.Released, p)
 			}
@@ -61,7 +61,7 @@ func (s *Service) Remove(sk Skill) (RemoveResult, error) {
 			}
 			unlinked := false
 			for _, p := range placements {
-				if (p.Kind == KindLink || p.Kind == KindBroken) && underPath(p.Skill, res.Entry) {
+				if (p.Kind == KindLink || p.Kind == KindBroken) && under(p.Skill, res.Entry) {
 					if err := removePlacement(st.lock, p); err != nil {
 						errs = append(errs, err)
 						continue

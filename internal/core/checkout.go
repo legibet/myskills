@@ -170,8 +170,9 @@ func (c *checkout) resolve(p string) (target string, via []string, ok bool) {
 	return resolved, via, true
 }
 
-// under reports whether p is dir or inside it, both slash-separated from the
-// root.
+// under reports whether p is dir or inside it. Both are slash-separated
+// paths relative to the same root, a repository or the library, with "."
+// for the root itself.
 func under(p, dir string) bool {
 	return dir == "." || p == dir || strings.HasPrefix(p, dir+"/")
 }
