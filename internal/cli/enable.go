@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/legibet/myskills/internal/core"
+	"github.com/legibet/myskills/internal/tui"
 )
 
 func (a *app) enableCmd() *cobra.Command {
@@ -154,7 +155,7 @@ func (a *app) noSkills(cmd *cobra.Command, global bool, dir string) error {
 			return err
 		}
 	}
-	return a.skillsTUI(scope, project)
+	return a.runTUI(tui.Options{View: tui.Skills, Scope: scope, Project: project})
 }
 
 // refError adds a hint to a failed lookup of a skill ref: library skills

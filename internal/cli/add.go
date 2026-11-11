@@ -13,6 +13,7 @@ import (
 	"github.com/legibet/myskills/internal/core"
 	"github.com/legibet/myskills/internal/sanitize"
 	"github.com/legibet/myskills/internal/source"
+	"github.com/legibet/myskills/internal/tui"
 )
 
 type addOptions struct {
@@ -156,7 +157,7 @@ func (a *app) choose(f *core.Fetched, all bool) ([]core.Candidate, error) {
 	case len(cands) == 1:
 		return cands, nil
 	case a.interactive:
-		picks, err := a.pick(f)
+		picks, err := tui.Pick(f)
 		if err == nil && len(picks) == 0 {
 			a.note("Nothing added.")
 		}

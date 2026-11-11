@@ -19,12 +19,6 @@ func (a *app) openTUI(view tui.View, query string) error {
 	return a.runTUI(tui.Options{View: view, Query: query, Scope: scope, Project: project})
 }
 
-// skillsTUI opens the full-screen app on the Skills view in scope; project
-// is the current project, nil when there is none.
-func (a *app) skillsTUI(scope core.Scope, project *core.Scope) error {
-	return a.runTUI(tui.Options{View: tui.Skills, Scope: scope, Project: project})
-}
-
 // runTUI runs the app and prints the summary of its changes once the
 // alternate screen is closed.
 func (a *app) runTUI(opts tui.Options) error {
@@ -37,9 +31,4 @@ func (a *app) runTUI(opts tui.Options) error {
 		a.println(line)
 	}
 	return err
-}
-
-// pick lets the user choose among the candidates of f; nil when cancelled.
-func (a *app) pick(f *core.Fetched) ([]core.Candidate, error) {
-	return tui.Pick(f)
 }
