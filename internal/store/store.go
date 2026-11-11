@@ -115,7 +115,7 @@ func SaveConfig(path string, c Config) error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(path, data)
+	return WriteFileAtomic(path, data)
 }
 
 func (c Config) validate() error {
@@ -226,7 +226,7 @@ func SaveLock(path string, l *Lock) error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(path, data)
+	return WriteFileAtomic(path, data)
 }
 
 // marshal encodes v as indented JSON with a trailing newline. Map keys are
@@ -242,9 +242,10 @@ func marshal(v any) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// writeFileAtomic replaces path with data through a temp file in the same
-// directory, so readers never see a partial file.
-func writeFileAtomic(path string, data []byte) error {
+// WriteFileAtomic replaces path with data through a temp file in the same
+// directory, which it creates when missing, so that no reader of the file
+// ever sees it partly written.
+func WriteFileAtomic(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err

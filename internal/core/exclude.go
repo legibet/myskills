@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/legibet/myskills/internal/git"
+	"github.com/legibet/myskills/internal/store"
 )
 
 // The managed block in .git/info/exclude (docs/enabling.md).
@@ -83,10 +84,7 @@ func (s *Service) writeExclude(st *state, root string) error {
 	if updated == string(old) {
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(file), 0o755); err != nil {
-		return err
-	}
-	return writeFileAtomic(file, []byte(updated))
+	return store.WriteFileAtomic(file, []byte(updated))
 }
 
 // escapePattern escapes the gitignore metacharacters in a path so it matches
@@ -135,28 +133,4 @@ func replaceBlock(content string, patterns []string) string {
 		return content + block
 	}
 	return strings.Join(lines[:begin], "") + block + strings.Join(lines[end+1:], "")
-}
-
-// writeFileAtomic replaces path with data through a temp file in the same
-// directory, so git never reads a partial file.
-func writeFileAtomic(path string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmp := f.Name()
-	_, err = f.Write(data)
-	if cerr := f.Close(); err == nil {
-		err = cerr
-	}
-	if err == nil {
-		err = os.Chmod(tmp, 0o644)
-	}
-	if err == nil {
-		err = os.Rename(tmp, path)
-	}
-	if err != nil {
-		_ = os.Remove(tmp)
-	}
-	return err
 }
