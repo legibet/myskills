@@ -232,6 +232,14 @@ func (d *data) usedIn(path string) []*place {
 	return out
 }
 
+// outdated reports whether a library skill has an outdated copy in a place.
+func (d *data) outdated(path string) bool {
+	return slices.ContainsFunc(d.usedIn(path), func(p *place) bool {
+		e, _ := p.enablement(path)
+		return e.Outdated()
+	})
+}
+
 // attention counts what needs attention in a place: outdated and modified
 // copies, and broken links.
 func (p *place) attention() int {

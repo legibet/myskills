@@ -220,6 +220,26 @@ func (f *fakeService) ApplyUpdates(u *core.Updates, paths []string, force bool) 
 	return out
 }
 
+// UpdateSkill does what core's does, through the fake's CheckUpdates and
+// ApplyUpdates. A skill the fake has no check for gives no state.
+func (f *fakeService) UpdateSkill(ctx context.Context, sk core.Skill, force bool) (core.UpdateState, error) {
+	u, err := f.CheckUpdates(ctx, []core.Skill{sk}, nil)
+	if err != nil {
+		return "", err
+	}
+	if len(u.Checks) == 0 {
+		return "", nil
+	}
+	switch c := u.Checks[0]; c.State {
+	case core.Available:
+		return c.State, f.ApplyUpdates(u, []string{sk.Path}, force)[0].Err
+	case core.CheckFailed:
+		return c.State, c.Err
+	default:
+		return c.State, nil
+	}
+}
+
 func commit(sk core.Skill) string {
 	if sk.Record == nil {
 		return ""

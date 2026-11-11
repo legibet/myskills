@@ -180,6 +180,20 @@ func TestUpdateRefreshesCopies(t *testing.T) {
 	h.wantNo("Update All")
 }
 
+func TestNoUpdateForCurrentCopies(t *testing.T) {
+	h := newHarness(t)
+	dir := h.path("linked")
+	writeSkill(t, filepath.Join(dir, "review"), "review", "Use review.", "The body of review.")
+	if _, err := h.svc.LinkLocal(dir); err != nil {
+		t.Fatal(err)
+	}
+	proj := h.project("web")
+	h.enable(proj, "review", core.EnableOptions{Mode: core.Copy})
+	h.start()
+	h.want("The body of review.")
+	h.wantNo("Update review")
+}
+
 func TestUpdateAll(t *testing.T) {
 	h := newHarness(t)
 	h.add(h.repo("pack", map[string]string{"review": "skills/review", "tdd": "skills/tdd"}))

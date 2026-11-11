@@ -68,7 +68,7 @@ type service interface {
 	RefreshCopies(scope core.Scope, paths []string, force bool) ([]core.Result, error)
 	Remove(sk core.Skill) (core.RemoveResult, error)
 	CheckUpdates(ctx context.Context, skills []core.Skill, progress func(done, total int)) (*core.Updates, error)
-	ApplyUpdates(u *core.Updates, paths []string, force bool) []core.UpdateResult
+	UpdateSkill(ctx context.Context, sk core.Skill, force bool) (core.UpdateState, error)
 	Fetch(ctx context.Context, spec source.Spec) (*core.Fetched, error)
 	Install(ctx context.Context, f *core.Fetched, picks []core.Candidate) []core.InstallResult
 	Search(ctx context.Context, query string, limit int) ([]skillssh.Result, error)

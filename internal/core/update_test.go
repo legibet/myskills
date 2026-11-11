@@ -285,6 +285,55 @@ func TestUpdateLocalSource(t *testing.T) {
 	}
 }
 
+func TestUpdateSkill(t *testing.T) {
+	e := newEnv(t)
+	dir, url := e.repo("src", map[string]string{"alpha": "skills/alpha"})
+	e.add(url)
+	lib := e.libDir("alpha")
+	update := func(force bool) (UpdateState, error) {
+		return e.svc.UpdateSkill(context.Background(), e.skill("alpha"), force)
+	}
+
+	if state, err := update(false); state != UpToDate || err != nil {
+		t.Fatalf("unchanged upstream: %s, %v", state, err)
+	}
+
+	writeSkill(t, filepath.Join(dir, "skills", "alpha"), "alpha", "v2")
+	commitAll(t, dir, "v2")
+	if state, err := update(false); state != Available || err != nil {
+		t.Fatalf("new commit: %s, %v", state, err)
+	}
+	if !strings.Contains(readFile(t, filepath.Join(lib, "SKILL.md")), "v2") {
+		t.Error("v2 not installed")
+	}
+
+	writeSkill(t, filepath.Join(dir, "skills", "alpha"), "alpha", "v3")
+	commitAll(t, dir, "v3")
+	writeFile(t, filepath.Join(lib, "mine.md"), "local")
+	state, err := update(false)
+	if state != Available {
+		t.Fatalf("local edit: state = %s", state)
+	}
+	wantErr(t, err, ErrModified, "alpha")
+	if !exists(filepath.Join(lib, "mine.md")) {
+		t.Fatal("the local edit was replaced without force")
+	}
+	if state, err := update(true); state != Available || err != nil {
+		t.Fatalf("forced: %s, %v", state, err)
+	}
+	if !strings.Contains(readFile(t, filepath.Join(lib, "SKILL.md")), "v3") {
+		t.Error("v3 not installed")
+	}
+
+	if err := os.RemoveAll(filepath.Join(dir, "skills", "alpha")); err != nil {
+		t.Fatal(err)
+	}
+	commitAll(t, dir, "drop alpha")
+	if state, err := update(false); state != RemovedUpstream || err != nil {
+		t.Errorf("removed upstream: %s, %v", state, err)
+	}
+}
+
 func TestUpdateNotUpdatableAndFailed(t *testing.T) {
 	e := newEnv(t)
 	dir, url := e.repo("src", map[string]string{"alpha": "alpha"})

@@ -184,7 +184,7 @@ func (a *app) skillActions(c *ui.Context, sk core.Skill) {
 	toolButton(c, iconFolder, revealLabel).OnClick(func() { a.desk.reveal(sk.Dir) })
 	toolButton(c, iconFile, "Open SKILL.md").Disabled(!sk.Valid()).OnClick(func() { a.desk.open(sk.Dir + "/SKILL.md") })
 	toolButton(c, iconTrash, "Remove from Library…").Disabled(busy).OnClick(func() { a.confirmRemove(sk) })
-	if sk.Updatable() || hasCopies(a.data.usedIn(sk.Path), sk.Path) {
+	if sk.Updatable() || a.data.outdated(sk.Path) {
 		kind := plain
 		if a.updates.checks[sk.Path].State == core.Available {
 			kind = primary
@@ -319,13 +319,12 @@ func (a *app) badges(sk core.Skill) []badge {
 	case a.updates.checks[sk.Path].State == core.Available:
 		out = append(out, badge{"Update", func(t *ui.Theme) ui.Color { return t.Accent }})
 	}
-	var copiesOutdated, copiesModified bool
+	var copiesModified bool
 	for _, p := range a.data.usedIn(sk.Path) {
 		e, _ := p.enablement(sk.Path)
-		copiesOutdated = copiesOutdated || e.Outdated()
 		copiesModified = copiesModified || e.Modified()
 	}
-	if copiesOutdated {
+	if a.data.outdated(sk.Path) {
 		out = append(out, badge{"Outdated", warn})
 	}
 	if copiesModified || sk.Modified {
@@ -373,12 +372,10 @@ func (a *app) chooseProject(fn func(core.Scope)) {
 	})
 }
 
-// hasCopies reports whether a skill has copy placements in the places.
-func hasCopies(places []*place, path string) bool {
-	return slices.ContainsFunc(places, func(p *place) bool {
-		e, ok := p.enablement(path)
-		return ok && slices.ContainsFunc(e.Placements, func(pl core.Placement) bool { return pl.Kind == core.KindCopy })
-	})
+// hasCopies reports whether a skill has copy placements in a place.
+func hasCopies(p *place, path string) bool {
+	e, ok := p.enablement(path)
+	return ok && slices.ContainsFunc(e.Placements, func(pl core.Placement) bool { return pl.Kind == core.KindCopy })
 }
 
 // updatesState is the last check for updates.
@@ -475,14 +472,12 @@ func (a *app) checkUpdates() {
 // so that discarding the local changes of one forces only that one.
 func (a *app) update(sk core.Skill) {
 	var places []core.Scope
-	stale := false
 	for _, p := range a.data.usedIn(sk.Path) {
-		if hasCopies([]*place{p}, sk.Path) {
+		if hasCopies(p, sk.Path) {
 			places = append(places, p.scope)
-			e, _ := p.enablement(sk.Path)
-			stale = stale || e.Outdated()
 		}
 	}
+	stale := a.data.outdated(sk.Path)
 	var copies func(i int)
 	copies = func(i int) {
 		if i == len(places) {
@@ -498,35 +493,20 @@ func (a *app) update(sk core.Skill) {
 		return
 	}
 	a.start(op{key: sk.Path, fail: "Couldn't update " + sk.Name, discard: "Your changes to " + sk.Name + " in the library are replaced by the update.", run: func(force bool) outcome {
-		out, updated := a.applyUpdate(sk, force)
-		if out.err == nil && len(out.warnings) == 0 && !updated && !stale {
-			out.note = sk.Name + " is up to date"
+		state, err := a.svc.UpdateSkill(a.ctx, sk, force)
+		switch {
+		case err != nil:
+			return outcome{err: err}
+		case state == core.RemovedUpstream:
+			return outcome{warnings: []string{sk.Name + " was removed upstream; the library keeps its copy"}}
+		case state != core.Available && !stale:
+			return outcome{note: sk.Name + " is up to date"}
 		}
-		return out
+		return outcome{}
 	}, then: func() {
 		delete(a.updates.checks, sk.Path)
 		copies(0)
 	}}, false)
-}
-
-// applyUpdate checks a skill and installs its update, if any. It runs off
-// the main thread.
-func (a *app) applyUpdate(sk core.Skill, force bool) (outcome, bool) {
-	u, err := a.svc.CheckUpdates(a.ctx, []core.Skill{sk}, nil)
-	if err != nil {
-		return outcome{err: err}, false
-	}
-	defer func() { _ = u.Close() }()
-	switch ch := u.Checks[0]; ch.State {
-	case core.Available:
-		r := a.svc.ApplyUpdates(u, []string{sk.Path}, force)[0]
-		return outcome{err: r.Err}, r.Updated
-	case core.RemovedUpstream:
-		return outcome{warnings: []string{sk.Name + " was removed upstream; the library keeps its copy"}}, false
-	case core.CheckFailed:
-		return outcome{err: ch.Err}, false
-	}
-	return outcome{}, false
 }
 
 // updateAll installs every update the last check found, then refreshes the

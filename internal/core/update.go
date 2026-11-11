@@ -298,6 +298,26 @@ func (s *Service) ApplyUpdates(u *Updates, paths []string, force bool) []UpdateR
 	return results
 }
 
+// UpdateSkill checks one skill and installs its update when there is one
+// (docs/library.md). It returns what the check found: with Available and no
+// error the update was installed, and the error is ErrModified when the
+// skill has local changes and force is false.
+func (s *Service) UpdateSkill(ctx context.Context, sk Skill, force bool) (UpdateState, error) {
+	u, err := s.CheckUpdates(ctx, []Skill{sk}, nil)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = u.Close() }()
+	switch c := u.Checks[0]; c.State {
+	case Available:
+		return c.State, s.ApplyUpdates(u, nil, force)[0].Err
+	case CheckFailed:
+		return c.State, c.Err
+	default:
+		return c.State, nil
+	}
+}
+
 // applyUpdate replaces one library skill with its checked upstream content.
 func (s *Service) applyUpdate(lock *store.Lock, c UpdateCheck, force bool) error {
 	// Another process may have updated it since: the check is then stale.

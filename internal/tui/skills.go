@@ -741,35 +741,16 @@ func (a *app) updateSkill() tea.Cmd {
 // applyUpdate checks the skill and installs its update, if any.
 func applyUpdate(ctx context.Context, svc service, sk core.Skill, force bool) outcome {
 	name := sanitize.Line(sk.Name)
-	u, err := svc.CheckUpdates(ctx, []core.Skill{sk}, nil)
-	if err != nil {
+	state, err := svc.UpdateSkill(ctx, sk, force)
+	switch {
+	case err != nil:
 		return outcome{err: err}
+	case state == core.Available:
+		return outcome{lines: []string{"Updated " + name}}
+	case state == core.RemovedUpstream:
+		return outcome{warnings: []string{name + " was removed upstream; the library keeps its copy"}}
 	}
-	defer func() { _ = u.Close() }()
-	var check core.UpdateCheck
-	for _, c := range u.Checks {
-		if c.Skill.Path == sk.Path {
-			check = c
-		}
-	}
-	var out outcome
-	switch check.State {
-	case core.Available:
-		for _, r := range svc.ApplyUpdates(u, []string{sk.Path}, force) {
-			if r.Err != nil {
-				out.err = r.Err
-				return out
-			}
-			if r.Updated {
-				out.lines = append(out.lines, "Updated "+name)
-			}
-		}
-	case core.RemovedUpstream:
-		out.warnings = append(out.warnings, name+" was removed upstream; the library keeps its copy")
-	case core.CheckFailed:
-		out.err = check.Err
-	}
-	return out
+	return outcome{}
 }
 
 // reload is r, and runs when the terminal comes back into focus: read the
