@@ -22,6 +22,17 @@ func TestEmptyLibrary(t *testing.T) {
 	}
 }
 
+func TestFailedReadKeepsLastRead(t *testing.T) {
+	h := newHarness(t)
+	h.add(h.repo("pack", map[string]string{"review": "skills/review"}))
+	h.start()
+	writeFile(t, filepath.Join(h.home, ".myskills", "lock.json"), "not json")
+	h.a.reload()
+	h.settle()
+	h.wantAlert("Couldn't read the library")
+	h.want("review")
+}
+
 func TestEnableGloballyAndInProject(t *testing.T) {
 	h := newHarness(t)
 	h.add(h.repo("pack", map[string]string{"review": "skills/review", "tdd": "skills/tdd"}))

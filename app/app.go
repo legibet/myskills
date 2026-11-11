@@ -179,9 +179,10 @@ func (a *app) reload(then ...func()) {
 		d := read(a.svc)
 		a.post(func() {
 			a.loading = false
-			a.data = d
 			if d.err != nil {
 				a.fail("Couldn't read the library", d.err)
+			} else {
+				a.data = d
 			}
 			for _, fn := range done {
 				fn()
