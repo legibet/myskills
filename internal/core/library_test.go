@@ -829,6 +829,24 @@ func TestInstallCopyFailureLeavesNothing(t *testing.T) {
 	}
 }
 
+func TestInstallLocalSkillIsSelfContained(t *testing.T) {
+	e := newEnv(t)
+	coll := e.path("dev", "coll")
+	writeSkill(t, filepath.Join(coll, "tdd"), "tdd", "")
+	writeFile(t, filepath.Join(coll, "common", "notes.md"), "notes")
+	symlink(t, "../common", filepath.Join(coll, "tdd", "shared"))
+
+	f := e.fetch(coll)
+	defer func() { _ = f.Close() }()
+	res := e.svc.Install(context.Background(), f, f.Candidates)
+	if res[0].Err == nil || !strings.Contains(res[0].Err.Error(), "tdd/shared") || !strings.Contains(res[0].Err.Error(), "outside the source") {
+		t.Fatalf("install = %+v", res[0])
+	}
+	if exists(e.libDir("tdd")) || len(e.lock().Skills) != 0 {
+		t.Error("failed install left a skill or record")
+	}
+}
+
 func TestInstallSourceWithAgentCopies(t *testing.T) {
 	e := newEnv(t)
 	dir := e.path("dev", "multi")

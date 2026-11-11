@@ -341,7 +341,13 @@ func (s *Service) install(lock *store.Lock, f *Fetched, c Candidate) (string, bo
 	}
 	defer func() { _ = os.RemoveAll(work) }()
 	stage := filepath.Join(work, c.Name)
-	if err := skill.Copy(c.Dir, stage, f.Root); err != nil {
+	// A local skill is checked for updates from its own folder alone, so it
+	// can't reach outside it; a git skill can reach into its repository.
+	boundary := f.Root
+	if f.Spec.Kind == source.Local {
+		boundary = c.Dir
+	}
+	if err := skill.Copy(c.Dir, stage, boundary); err != nil {
 		return "", false, err
 	}
 	// The source may have changed since it was fetched.

@@ -24,8 +24,8 @@ The same rules apply to installing into the library and to copy placements.
 
 - Regular files keep their executable bit, directories recurse, and `.git` and `.DS_Store` are skipped.
 - A symlink whose target stays inside the skill is kept as a relative symlink.
-- A symlink that points outside the skill but inside the source root (the repository or local folder) is dereferenced, so the copied skill is self-contained.
-- Any other symlink (absolute and outside, escaping the source root, or broken) fails the operation with its path, before anything is written.
+- A symlink that points outside the skill but inside its root is dereferenced, so the copied skill is self-contained. The root is the repository of a git source and the owning entry of a library skill. A skill from a local folder has none: only its own folder is recorded, and an update check reads nothing else.
+- Any other symlink (absolute and outside, escaping the root, or broken) fails the operation with its path, before anything is written.
 - A library skill _hashed as a copy_ gives the hash its copy would have, without copying: the same rules, with dereferenced content in place of those links. A change behind such a link therefore shows the skill's copies as outdated.
 - On Windows, copying a skill that contains a symlink needs Developer Mode.
 
@@ -77,7 +77,7 @@ skills.sh is used only to search and preview.
 - When `skills/<name>` exists: from the same source (url, ref and path, or the local path), it is "already in library" and `update` is suggested; from another source, it is a name conflict. Nothing changes either way.
 - A requested name (`@skill`, each `-s`) matches a candidate's frontmatter name or folder name, ignoring case. A name that matches none is a not-found error listing the candidates. A named candidate that is invalid fails with its validation error.
 - A name that matches several candidates is an ambiguity error listing their paths.
-- A local folder is copied by default, with the record `{type: local, path: <candidate dir>}`. `--link` instead creates `skills/<basename>` as a symlink to the absolute folder (a skill or a collection), with no record. A local path inside the library is rejected.
+- A local folder is copied by default, with the record `{type: local, path: <candidate dir>}`. `--link` instead creates `skills/<basename>` as a symlink to the absolute folder (a skill or a collection), with no record. A local path inside the library is rejected. A collection whose skills share files through symlinks is added with `--link`.
 
 ## Updates
 
