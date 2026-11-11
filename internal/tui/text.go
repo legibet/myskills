@@ -2,12 +2,11 @@ package tui
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/legibet/myskills/internal/core"
 	"github.com/legibet/myskills/internal/sanitize"
 )
 
@@ -37,17 +36,7 @@ func plural(n int, one, many string) string {
 
 // tildePath shortens a path under the home directory to "~/…", on one line.
 func tildePath(p string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return sanitize.Line(p)
-	}
-	if p == home {
-		return "~"
-	}
-	if rel, ok := strings.CutPrefix(p, home+string(filepath.Separator)); ok {
-		return "~/" + sanitize.Line(filepath.ToSlash(rel))
-	}
-	return sanitize.Line(p)
+	return sanitize.Line(core.Tilde(p))
 }
 
 // truncate shortens plain text to w cells with an ellipsis.

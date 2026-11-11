@@ -35,7 +35,7 @@ func (sc Scope) String() string {
 	if sc.IsGlobal() {
 		return "global"
 	}
-	return tilde(sc.Root)
+	return Tilde(sc.Root)
 }
 
 // ProjectScope resolves the project containing dir (docs/enabling.md): its git

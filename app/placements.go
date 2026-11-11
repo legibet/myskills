@@ -49,7 +49,7 @@ func placeLead(c *ui.Context, sc core.Scope) func() {
 			return
 		}
 		rowIcon(c, iconProject)
-		rowText(c, placeName(sc), tilde(sc.Root))
+		rowText(c, placeName(sc), core.Tilde(sc.Root))
 	}
 }
 
@@ -99,7 +99,7 @@ func (a *app) agentsChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablem
 							a.disable(p.scope, sk, e, d.Agents)
 						}
 					}
-					ui.Text(c, tilde(d.Path)).FontSize(textCaption(c)).TextColor(pal.text2).Margin(0, 0, 0, 26).SingleLine()
+					ui.Text(c, core.Tilde(d.Path)).FontSize(textCaption(c)).TextColor(pal.text2).Margin(0, 0, 0, 26).SingleLine()
 				})
 			}
 		})
@@ -176,7 +176,7 @@ func (a *app) confirmCopies(copies []core.Placement, title, action string, fn fu
 	var lines []string
 	modified := false
 	for _, p := range copies {
-		line := tilde(p.Path)
+		line := core.Tilde(p.Path)
 		if p.Modified {
 			line += " (local changes will be lost)"
 			modified = true
@@ -192,7 +192,7 @@ func lossText(placements []core.Placement) string {
 	var paths []string
 	for _, p := range placements {
 		if p.Modified {
-			paths = append(paths, tilde(p.Path))
+			paths = append(paths, core.Tilde(p.Path))
 		}
 	}
 	if len(paths) == 0 {
@@ -241,7 +241,7 @@ func warnings(res core.Result) []string {
 	out := slices.Clone(res.Warnings)
 	for _, ch := range res.Changes {
 		if ch.Warning != "" {
-			out = append(out, tilde(ch.Path)+": "+ch.Warning)
+			out = append(out, core.Tilde(ch.Path)+": "+ch.Warning)
 		}
 	}
 	return out

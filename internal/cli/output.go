@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
@@ -128,21 +127,6 @@ func table(indent string, rows [][]string) string {
 	return strings.Join(lines, "\n")
 }
 
-// tilde shortens a path in the home directory to "~/…".
-func tilde(p string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return p
-	}
-	if p == home {
-		return "~"
-	}
-	if rel, err := filepath.Rel(home, p); err == nil && filepath.IsLocal(rel) {
-		return filepath.Join("~", rel)
-	}
-	return p
-}
-
 // scopePath shows a placement path relative to the project root of scope,
 // or with "~" for the home directory.
 func scopePath(scope core.Scope, p string) string {
@@ -151,7 +135,7 @@ func scopePath(scope core.Scope, p string) string {
 			return rel
 		}
 	}
-	return tilde(p)
+	return core.Tilde(p)
 }
 
 // plural returns "1 skill" or "3 skills".

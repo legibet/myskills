@@ -112,8 +112,8 @@ func hidden(name string) bool {
 	return strings.HasPrefix(name, ".")
 }
 
-// tilde shortens a path inside the home directory to "~/…" for messages.
-func tilde(p string) string {
+// Tilde shortens a path inside the home directory to "~/…" for display.
+func Tilde(p string) string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
 		return p

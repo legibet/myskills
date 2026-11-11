@@ -373,7 +373,7 @@ func (a *app) chooseSource() {
 	a.chooseFolder("Choose a skill, or a folder of skills", func(dir string) {
 		spec, err := source.Parse(dir)
 		if err != nil {
-			a.fail("Can't read "+tilde(dir), err)
+			a.fail("Can't read "+core.Tilde(dir), err)
 			return
 		}
 		a.find.query = dir
@@ -517,7 +517,7 @@ func installOutcome(r core.InstallResult) (outcome, string) {
 
 // linkFolder adds the fetched folder to the library as a link (docs/library.md).
 func (a *app) linkFolder(dir string) {
-	a.start(op{key: "link:" + dir, fail: "Couldn't link " + tilde(dir), run: func(bool) outcome {
+	a.start(op{key: "link:" + dir, fail: "Couldn't link " + core.Tilde(dir), run: func(bool) outcome {
 		_, err := a.svc.LinkLocal(dir)
 		return outcome{err: err}
 	}}, false)
@@ -552,14 +552,14 @@ func (a *app) sourceBar(c *ui.Context) {
 	local := spec.Kind == source.Local
 	icon, sub := iconGlobal, spec.URL
 	if local {
-		icon, sub = iconFolder, tilde(spec.Path)
+		icon, sub = iconFolder, core.Tilde(spec.Path)
 	}
 	switch {
 	case p.fetched != nil:
 		n := len(p.fetched.Candidates)
 		sub = fmt.Sprintf("%d %s", n, plural(n, "skill", "skills"))
 		if local {
-			sub += " · " + tilde(spec.Path)
+			sub += " · " + core.Tilde(spec.Path)
 		}
 	case p.fetchErr != nil:
 		sub = "Couldn't fetch"
@@ -702,7 +702,7 @@ func (a *app) origin(c *ui.Context, r findRow) {
 			url = source.WebURL(spec.URL, spec.Ref, r.cand.RelPath)
 			extra = r.cand.RelPath
 		} else {
-			label = tilde(r.cand.Dir)
+			label = core.Tilde(r.cand.Dir)
 		}
 	}
 	if url != "" {

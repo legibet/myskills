@@ -204,7 +204,7 @@ func (s *Service) planEnable(st *state, sk Skill, tgts []target, mode Mode, opts
 			case p.Kind == KindBroken && p.Skill == sk.Path:
 				stp.old = &p
 			case p.Kind == KindBroken:
-				return nil, errorf(ErrConflict, "%s is a broken link to library skill %s; disable %s or move it away to enable %s there", tilde(stp.dest), p.Skill, p.Skill, sk.Path)
+				return nil, errorf(ErrConflict, "%s is a broken link to library skill %s; disable %s or move it away to enable %s there", Tilde(stp.dest), p.Skill, p.Skill, sk.Path)
 			case p.Kind == KindLink && p.Skill == sk.Path:
 				if opts.Mode == Copy {
 					stp.old = &p
@@ -215,7 +215,7 @@ func (s *Service) planEnable(st *state, sk Skill, tgts []target, mode Mode, opts
 				s.checkCopy(st.lock, &p)
 				switch {
 				case opts.Mode == Link && p.Modified && !opts.Force:
-					return nil, errorf(ErrModified, "%s has local changes that converting it to a link would delete; force discards them", tilde(p.Path))
+					return nil, errorf(ErrModified, "%s has local changes that converting it to a link would delete; force discards them", Tilde(p.Path))
 				case opts.Mode == Link:
 					stp.old = &p
 				case opts.Mode == Copy && p.Outdated && p.Modified && !opts.Force:
@@ -227,7 +227,7 @@ func (s *Service) planEnable(st *state, sk Skill, tgts []target, mode Mode, opts
 					stp.action, stp.mode = Unchanged, Copy
 				}
 			default:
-				return nil, errorf(ErrConflict, "%s already exists (%s); move it away to enable %s there", tilde(stp.dest), occupant(p), sk.Path)
+				return nil, errorf(ErrConflict, "%s already exists (%s); move it away to enable %s there", Tilde(stp.dest), occupant(p), sk.Path)
 			}
 		}
 		if stp.action != Unchanged && mode == Link {
@@ -373,7 +373,7 @@ func recheck(lock *store.Lock, stp step) error {
 	}
 	_, err := os.Lstat(stp.dest)
 	if err == nil {
-		return errorf(ErrConflict, "%s was created while myskills was working; left in place", tilde(stp.dest))
+		return errorf(ErrConflict, "%s was created while myskills was working; left in place", Tilde(stp.dest))
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
 		return err
@@ -390,17 +390,17 @@ func unchanged(lock *store.Lock, p Placement) error {
 	switch p.Kind {
 	case KindLink, KindBroken:
 		if target, err := os.Readlink(p.Path); err != nil || target != p.target {
-			return errorf(ErrConflict, "%s changed while myskills was working; left in place", tilde(p.Path))
+			return errorf(ErrConflict, "%s changed while myskills was working; left in place", Tilde(p.Path))
 		}
 	case KindCopy:
 		rec, ok := lock.Copies[p.Path]
 		info, err := os.Lstat(p.Path)
 		if !ok || err != nil || !os.SameFile(info, p.info) {
-			return errorf(ErrConflict, "%s changed while myskills was working; left in place", tilde(p.Path))
+			return errorf(ErrConflict, "%s changed while myskills was working; left in place", Tilde(p.Path))
 		}
 		if !p.Modified {
 			if h, err := skill.Hash(p.Path); err != nil || h != rec.Hash {
-				return errorf(ErrModified, "%s changed while myskills was working; left in place", tilde(p.Path))
+				return errorf(ErrModified, "%s changed while myskills was working; left in place", Tilde(p.Path))
 			}
 		}
 	default:
@@ -465,7 +465,7 @@ func (s *Service) Disable(sc Scope, ref string, opts DisableOptions) (Result, er
 				continue
 			}
 			if s.checkCopy(st.lock, p); p.Modified && !opts.Force {
-				return errorf(ErrModified, "%s has local changes; force deletes them", tilde(p.Path))
+				return errorf(ErrModified, "%s has local changes; force deletes them", Tilde(p.Path))
 			}
 		}
 
@@ -536,7 +536,7 @@ func (s *Service) RefreshCopies(sc Scope, paths []string, force bool) ([]Result,
 					Path: p.Path, Agents: p.Agents, Action: Unchanged, Mode: Copy,
 					Warning: "modified locally, so not refreshed; force overwrites it",
 				})
-				errs = append(errs, errorf(ErrModified, "%s has local changes, so it was not refreshed; force overwrites them", tilde(p.Path)))
+				errs = append(errs, errorf(ErrModified, "%s has local changes, so it was not refreshed; force overwrites them", Tilde(p.Path)))
 				continue
 			}
 			t := target{dir: &agentDir{real: realPath(filepath.Dir(p.Path)), agents: p.Agents}, path: filepath.Dir(p.Path)}

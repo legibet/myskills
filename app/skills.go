@@ -132,7 +132,7 @@ func (a *app) skillRow(c *ui.Context, sk core.Skill, onAccent bool) {
 		for _, b := range a.badges(sk) {
 			rowTag(c, b.text, b.color(t), onAccent)
 		}
-	}, tilde(sk.SourceLabel())+" · "+a.where(sk.Path))
+	}, core.Tilde(sk.SourceLabel())+" · "+a.where(sk.Path))
 }
 
 // skillDetail is the skill chosen: what it is, where it is enabled, and its
@@ -142,7 +142,7 @@ func (a *app) skillDetail(c *ui.Context, sk core.Skill) {
 		detailBar(c, func() { a.skillActions(c, sk) })
 		detailPane(c, sk.Path, func() {
 			detailHeader(c, sk.Name, sk.Description, func() {
-				label := tilde(sk.SourceLabel())
+				label := core.Tilde(sk.SourceLabel())
 				if url := webURL(sk); url != "" {
 					webLink(c, label, url)
 				} else {
@@ -251,7 +251,7 @@ func (a *app) enableInProject(c *ui.Context, g *rowGroup, sk core.Skill) {
 				if _, ok := p.enablement(sk.Path); ok || p.scope.IsGlobal() {
 					continue
 				}
-				if m.Item(tilde(p.scope.Root)).Chosen() {
+				if m.Item(core.Tilde(p.scope.Root)).Chosen() {
 					a.enable(p.scope, sk, core.EnableOptions{Mode: core.Link})
 				}
 			}
@@ -366,7 +366,7 @@ func (a *app) chooseProject(fn func(core.Scope)) {
 	a.chooseFolder("Choose a project folder", func(dir string) {
 		sc, err := a.svc.ProjectScope(dir)
 		if err != nil {
-			a.fail("Can't enable skills in "+tilde(dir), err)
+			a.fail("Can't enable skills in "+core.Tilde(dir), err)
 			return
 		}
 		fn(sc)
@@ -583,7 +583,7 @@ func (a *app) confirmRemove(sk core.Skill) {
 			body = append(body, "Also removed: "+strings.Join(others, ", ")+".")
 		}
 	} else {
-		body = append(body, "Deletes "+tilde(sk.Dir)+".")
+		body = append(body, "Deletes "+core.Tilde(sk.Dir)+".")
 	}
 	var places []string
 	for i := range a.data.places {

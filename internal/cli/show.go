@@ -53,10 +53,10 @@ its SKILL.md, rendered in a terminal and as plain markdown otherwise.`,
 			}
 			src := sk.SourceLabel()
 			if r := sk.Record; r != nil && r.Source.Type == "local" {
-				src = tilde(r.Source.Path)
+				src = core.Tilde(r.Source.Path)
 			}
 			rows := [][]string{
-				{dim("path"), tilde(sk.Dir)},
+				{dim("path"), core.Tilde(sk.Dir)},
 				{dim("source"), src},
 				{dim("enabled"), where},
 			}

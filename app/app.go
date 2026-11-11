@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"errors"
-	"os"
 	"path"
 	"path/filepath"
 	"runtime"
@@ -584,16 +583,4 @@ func (a *app) alertView(c *ui.Context) {
 	if i >= 0 && al.choose != nil {
 		al.choose(i)
 	}
-}
-
-// tilde writes a path under the home directory with "~".
-func tilde(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return path
-	}
-	if rel, err := filepath.Rel(home, path); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return filepath.Join("~", rel)
-	}
-	return path
 }

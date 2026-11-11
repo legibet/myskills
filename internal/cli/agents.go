@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/legibet/myskills/internal/agent"
+	"github.com/legibet/myskills/internal/core"
 )
 
 func (a *app) agentsCmd() *cobra.Command {
@@ -43,7 +44,7 @@ the defaults for new enablements. Custom agents and the defaults are stored in
 					project = ag.Project
 				}
 				if dir, ok := ag.GlobalDir(); ok {
-					global = tilde(dir)
+					global = core.Tilde(dir)
 				}
 				rows = append(rows, []string{mark, ag.ID, ag.Name, project, global})
 			}
@@ -129,7 +130,7 @@ project first; its copies stay as unmanaged files.`,
 			}
 			removed, err := svc.RemoveAgent(args[0])
 			for _, p := range removed {
-				a.ok("unlinked " + tilde(p))
+				a.ok("unlinked " + core.Tilde(p))
 			}
 			if err != nil {
 				return err

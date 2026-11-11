@@ -19,7 +19,7 @@ func TestProjectsList(t *testing.T) {
 	h.enable(api, "tdd", core.EnableOptions{})
 	h.start()
 	h.click("Projects")
-	h.want("Global", "0 skills · Every project", "2 skills · "+tilde(web.Root), "1 skill · "+tilde(api.Root))
+	h.want("Global", "0 skills · Every project", "2 skills · "+core.Tilde(web.Root), "1 skill · "+core.Tilde(api.Root))
 	// Global first, then the projects by name.
 	if names := []string{placeName(h.a.data.places[1].scope), placeName(h.a.data.places[2].scope)}; !slices.Equal(names, []string{"api", "web"}) {
 		t.Errorf("projects = %v", names)

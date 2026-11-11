@@ -45,7 +45,7 @@ func (s Skill) Updatable() bool {
 func (s Skill) SourceLabel() string {
 	switch {
 	case s.Linked:
-		return tilde(s.LinkTarget)
+		return Tilde(s.LinkTarget)
 	case s.Record != nil && s.Record.Source.Type == "git":
 		return source.Label(s.Record.Source.URL)
 	}

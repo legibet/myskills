@@ -54,7 +54,7 @@ func TestEnableGloballyAndInProject(t *testing.T) {
 
 	// A known project is offered by name once it has a skill.
 	h.click("tdd")
-	h.choose("Enable in Project…", tilde(proj.Root))
+	h.choose("Enable in Project…", core.Tilde(proj.Root))
 	if got := h.enabled(proj); !slices.Equal(got, []string{"review", "tdd"}) {
 		t.Fatalf("project = %v, want [review tdd]", got)
 	}
@@ -122,7 +122,7 @@ func TestDisableModifiedCopyDiscards(t *testing.T) {
 
 	h.click("Disable in web")
 	h.wantAlert("Disable review in web?")
-	if msg, want := h.a.alerts[0].message, "This deletes the copied files:\n"+tilde(modified)+" (local changes will be lost)\n"+tilde(kept); msg != want {
+	if msg, want := h.a.alerts[0].message, "This deletes the copied files:\n"+core.Tilde(modified)+" (local changes will be lost)\n"+core.Tilde(kept); msg != want {
 		t.Errorf("message = %q, want %q", msg, want)
 	}
 	h.confirm("Disable review in web?")
@@ -308,7 +308,7 @@ func TestRefreshModifiedCopyAsks(t *testing.T) {
 
 	h.click("Refresh")
 	h.wantAlert("Discard local changes?")
-	if msg := h.a.alerts[0].message; msg != "These copies have local changes that will be lost:\n"+tilde(copied) {
+	if msg := h.a.alerts[0].message; msg != "These copies have local changes that will be lost:\n"+core.Tilde(copied) {
 		t.Errorf("message = %q", msg)
 	}
 	h.confirm("Discard local changes?")

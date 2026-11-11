@@ -68,7 +68,7 @@ func (a *app) projectsView(c *ui.Context) {
 func (a *app) placeRow(c *ui.Context, p *place, onAccent bool) {
 	where := "Every project"
 	if !p.scope.IsGlobal() {
-		where = tilde(p.scope.Root)
+		where = core.Tilde(p.scope.Root)
 	}
 	n := len(p.status.Enablements)
 	listRow(c, onAccent, func() {
@@ -109,7 +109,7 @@ func (a *app) placeDetail(c *ui.Context, p *place) {
 			}
 			detailHeader(c, placeName(p.scope), description, func() {
 				if !p.scope.IsGlobal() {
-					metaText(c, tilde(p.scope.Root))
+					metaText(c, core.Tilde(p.scope.Root))
 				}
 			})
 			if p.err != nil {
@@ -167,7 +167,7 @@ func (a *app) brokenLinks(c *ui.Context, p *place) {
 		for _, b := range p.status.Broken {
 			g.row(c.Key(b.Path)).Children(func() {
 				ui.Icon(c, iconWarning).Size(16, 16).Shrink(0).TextColor(pal.red)
-				rowText(c, b.Name, tilde(b.Path)+" → "+b.Skill+", missing from the library")
+				rowText(c, b.Name, core.Tilde(b.Path)+" → "+b.Skill+", missing from the library")
 				if a.working(c, "broken:"+b.Path) {
 					spinner(c, "Working")
 					return
@@ -183,7 +183,7 @@ func unmanaged(c *ui.Context, others []core.Placement) {
 	group(c, "Not managed by myskills", func(g *rowGroup) {
 		for _, o := range others {
 			g.row(c.Key(o.Path)).MinHeight(44).Children(func() {
-				rowText(c, o.Name, tilde(o.Path))
+				rowText(c, o.Name, core.Tilde(o.Path))
 			})
 		}
 	})

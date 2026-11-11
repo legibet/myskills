@@ -106,7 +106,7 @@ func (s *Service) checkLocalDir(dir string) error {
 	// Check both spellings: a path through a linked entry resolves outside.
 	for _, pair := range [][2]string{{s.paths.Skills, filepath.Clean(dir)}, {realPath(s.paths.Skills), realPath(dir)}} {
 		if _, ok := within(pair[0], pair[1]); ok || pair[0] == pair[1] {
-			return fmt.Errorf("%s is inside the library; choose a folder outside %s", dir, tilde(s.paths.Skills))
+			return fmt.Errorf("%s is inside the library; choose a folder outside %s", dir, Tilde(s.paths.Skills))
 		}
 	}
 	return nil

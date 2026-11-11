@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/legibet/myskills/internal/agent"
+	"github.com/legibet/myskills/internal/core"
 )
 
 // agentsPage is the state of the Agents page.
@@ -78,7 +79,7 @@ func (a *app) agentRow(c *ui.Context, g *rowGroup, ag agent.Agent) {
 			dir("Project", ag.Project)
 			global := ""
 			if gd, ok := ag.GlobalDir(); ok {
-				global = tilde(gd)
+				global = core.Tilde(gd)
 			}
 			dir("Global", global)
 		})

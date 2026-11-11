@@ -123,7 +123,7 @@ func (a *app) addLink(cmd *cobra.Command, spec source.Spec, o addOptions) error 
 	if err != nil {
 		return err
 	}
-	a.ok("linked " + name + " → " + tilde(spec.Path))
+	a.ok("linked " + name + " → " + core.Tilde(spec.Path))
 	return nil
 }
 
@@ -177,7 +177,7 @@ func (a *app) choose(f *core.Fetched, all bool) ([]core.Candidate, error) {
 // skills/pdf" or a local folder.
 func candidateOrigin(f *core.Fetched, c core.Candidate) string {
 	if f.Spec.Kind == source.Local {
-		return tilde(c.Dir)
+		return core.Tilde(c.Dir)
 	}
 	if c.RelPath == "" {
 		return source.Label(f.Spec.URL)

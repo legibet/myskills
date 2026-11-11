@@ -88,15 +88,15 @@ Asks for confirmation in a terminal; elsewhere pass -y.`,
 				if res.Entry != "" {
 					detail := ""
 					if sk.Linked {
-						detail = dim(fmt.Sprintf(" (linked entry with %s; files in %s untouched)", plural(len(res.Skills), "skill"), tilde(sk.LinkTarget)))
+						detail = dim(fmt.Sprintf(" (linked entry with %s; files in %s untouched)", plural(len(res.Skills), "skill"), core.Tilde(sk.LinkTarget)))
 					}
 					a.ok("removed " + res.Entry + detail)
 				}
 				for _, p := range res.Unlinked {
-					a.ok("unlinked " + tilde(p))
+					a.ok("unlinked " + core.Tilde(p))
 				}
 				for _, p := range res.Released {
-					a.warn("left the copy at " + tilde(p) + dim(" (no longer managed)"))
+					a.warn("left the copy at " + core.Tilde(p) + dim(" (no longer managed)"))
 				}
 				for _, w := range res.Warnings {
 					a.warn(w)
