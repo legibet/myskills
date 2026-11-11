@@ -427,10 +427,8 @@ func (a *app) rowState(r findRow) (state, path string) {
 		}
 	}
 	if r.res != nil {
-		if spec, err := source.Parse(r.res.Source); err == nil && spec.Kind == source.Git {
-			if sk, ok := core.Installed(a.data.lib, spec.URL, r.res.SkillID); ok {
-				return stateInLibrary, sk.Path
-			}
+		if sk, ok := core.Installed(a.data.lib, r.res.Spec().URL, r.res.SkillID); ok {
+			return stateInLibrary, sk.Path
 		}
 		// The library keeps a skill under its name: one from another source
 		// has it already (docs/library.md).
@@ -474,11 +472,7 @@ func (a *app) addResult(res skillssh.Result) {
 	key := findRow{res: &res}.key()
 	var path string
 	a.start(op{key: key, fail: "Couldn't add " + res.SkillID, run: func(bool) outcome {
-		spec, err := source.Parse(res.Source + "@" + res.SkillID)
-		if err != nil {
-			return outcome{err: err}
-		}
-		f, err := a.svc.Fetch(a.ctx, spec)
+		f, err := a.svc.Fetch(a.ctx, res.Spec())
 		if err != nil {
 			return outcome{err: err}
 		}
@@ -705,9 +699,7 @@ func (a *app) origin(c *ui.Context, r findRow) {
 	var label, url, extra string
 	if r.res != nil {
 		label, extra = r.res.Source, installs(r.res.Installs)
-		if spec, err := source.Parse(r.res.Source); err == nil {
-			url = source.WebURL(spec.URL, "", "")
-		}
+		url = source.WebURL(r.res.Spec().URL, "", "")
 	} else {
 		spec := a.find.spec
 		label = sourceName(spec)

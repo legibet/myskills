@@ -65,7 +65,7 @@ A fetch downloads only what it reads, so adding one skill from a large repositor
 
 skills.sh is used only to search and preview.
 
-- `GET https://skills.sh/api/search?q=<q>&limit=<n>` returns `{skills:[{id, source, skillId, name, installs}]}`. `source` is a GitHub `owner/repo`, `skillId` the skill name, and `name` may be a display name.
+- `GET https://skills.sh/api/search?q=<q>&limit=<n>` returns `{skills:[{id, source, skillId, name, installs}]}`. `source` is a GitHub `owner/repo`, `skillId` the skill name, and `name` may be a display name. A result whose `source` is not `owner/repo`, or that has no `skillId`, is dropped.
 - `GET https://skills.sh/api/download/<owner>/<repo>/<skillId>` returns `{files:[{path, contents}], hash}`; the frontends preview its `SKILL.md`.
 - Adding a result adds `<source>@<skillId>` through git, so every remote skill has the same record and the same update path.
 

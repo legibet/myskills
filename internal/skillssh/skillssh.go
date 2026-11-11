@@ -8,9 +8,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/legibet/myskills/internal/source"
 )
 
 // DefaultBaseURL is the skills.sh API origin.
@@ -36,7 +40,13 @@ type Result struct {
 	Installs int    `json:"installs"`
 }
 
-// Search returns results for query in the order skills.sh ranks them.
+// repoRe matches a GitHub owner/repo.
+var repoRe = regexp.MustCompile(`^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$`)
+
+// Search returns results for query in the order skills.sh ranks them. The
+// frontends add a result through git from what it says, so a result that
+// doesn't name a skill in a GitHub repository is dropped: skills.sh is not
+// trusted, and must not choose another kind of source.
 func (c *Client) Search(ctx context.Context, query string, limit int) ([]Result, error) {
 	q := url.Values{"q": {query}, "limit": {strconv.Itoa(limit)}}
 	var body struct {
@@ -45,7 +55,20 @@ func (c *Client) Search(ctx context.Context, query string, limit int) ([]Result,
 	if err := c.get(ctx, "/api/search?"+q.Encode(), &body); err != nil {
 		return nil, fmt.Errorf("skills.sh search: %w", err)
 	}
-	return body.Skills, nil
+	return slices.DeleteFunc(body.Skills, func(r Result) bool {
+		return !repoRe.MatchString(r.Source) || r.SkillID == ""
+	}), nil
+}
+
+// Spec returns the source that adds the result (docs/library.md): its GitHub
+// repository, restricted to the skill.
+func (r Result) Spec() source.Spec {
+	return source.Spec{
+		Kind:   source.Git,
+		Input:  r.Source + "@" + r.SkillID,
+		URL:    "https://github.com/" + r.Source + ".git",
+		Skills: []string{r.SkillID},
+	}
 }
 
 // SkillMarkdown returns the SKILL.md of a skill from the skills.sh snapshot.

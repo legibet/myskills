@@ -5,10 +5,13 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/legibet/myskills/internal/source"
 )
 
 // newServer serves handler and returns a client for it.
@@ -41,8 +44,11 @@ func TestSearch(t *testing.T) {
 		_, _ = w.Write([]byte(`{"query":"swift ui&more","searchType":"fuzzy","skills":[
 			{"id":"b/r/z","source":"b/r","skillId":"z","name":"Zed","installs":5,"extra":true},
 			{"id":"a/r/y","source":"a/r","skillId":"y","name":"y","installs":12853},
-			{"id":"a/r/x","source":"a/r","skillId":"x","name":"x"}
-		],"count":3}`))
+			{"id":"a/r/x","source":"a/r","skillId":"x","name":"x"},
+			{"source":"https://evil.example/r","skillId":"a"},
+			{"source":"a/r/sub","skillId":"a"},
+			{"source":"a/r","skillId":""}
+		],"count":6}`))
 	})
 
 	got, err := c.Search(t.Context(), "swift ui&more", 3)
@@ -56,6 +62,16 @@ func TestSearch(t *testing.T) {
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("Search = %+v\nwant %+v", got, want)
+	}
+}
+
+func TestResultSpec(t *testing.T) {
+	want, err := source.Parse("a/r@x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := (Result{Source: "a/r", SkillID: "x"}).Spec(); !reflect.DeepEqual(got, want) {
+		t.Errorf("Spec = %+v\nwant %+v", got, want)
 	}
 }
 

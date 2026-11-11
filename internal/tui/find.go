@@ -424,11 +424,7 @@ func (a *app) refreshInLibrary() {
 	maps.DeleteFunc(a.fd.added, func(_, path string) bool { return !a.inLibrary(path) })
 	a.fd.inLib = map[string]string{}
 	for _, r := range a.fd.results {
-		spec, err := source.Parse(r.Source)
-		if err != nil || spec.Kind != source.Git {
-			continue
-		}
-		if sk, ok := core.Installed(a.data.lib, spec.URL, r.SkillID); ok {
+		if sk, ok := core.Installed(a.data.lib, r.Spec().URL, r.SkillID); ok {
 			a.fd.inLib[findRow{res: &r}.key()] = sk.Path
 		}
 	}
@@ -447,10 +443,10 @@ func (a *app) confirmAdd() tea.Cmd {
 		if p := a.fd.inLib[key]; p != "" {
 			return a.setStatus(stInfo, sanitize.Line(res.SkillID)+" is already in your library as "+sanitize.Line(p))
 		}
-		name, from = res.SkillID, res.Source
-		if spec, err := source.Parse(res.Source); err == nil {
-			from = spec.URL
+		if a.inLibrary(res.SkillID) {
+			return a.setStatus(stWarn, "The library already has "+sanitize.Line(res.SkillID)+" from another source under this name")
 		}
+		name, from = res.SkillID, res.Spec().URL
 		add = func() tea.Cmd { return a.addResult(res, key) }
 	case r.cand != nil:
 		c := a.liveCandidate(*r.cand)
@@ -572,11 +568,7 @@ func (a *app) addResult(res skillssh.Result, key string) tea.Cmd {
 	}
 	svc, ctx, src := a.svc, a.ctx, res.Source
 	return a.start(mutation{key: key, run: func(bool) outcome {
-		spec, err := source.Parse(src + "@" + res.SkillID)
-		if err != nil {
-			return outcome{err: err}
-		}
-		f, err := svc.Fetch(ctx, spec)
+		f, err := svc.Fetch(ctx, res.Spec())
 		if err != nil {
 			return outcome{err: err}
 		}
@@ -666,9 +658,7 @@ func (a *app) openSource() tea.Cmd {
 	var url string
 	switch {
 	case r.res != nil:
-		if spec, err := source.Parse(r.res.Source); err == nil {
-			url = source.WebURL(spec.URL, "", "")
-		}
+		url = source.WebURL(r.res.Spec().URL, "", "")
 	case r.cand != nil:
 		spec := a.fd.fetched.Spec
 		url = source.WebURL(spec.URL, spec.Ref, r.cand.RelPath)
@@ -833,6 +823,8 @@ func (a *app) findStatus(r findRow) (string, lipgloss.Style) {
 		return "✓ added", t.good
 	case r.res != nil && a.fd.inLib[key] != "":
 		return "✓ in library", t.good
+	case r.res != nil && a.inLibrary(r.res.SkillID):
+		return "✗ conflict", t.bad
 	case r.cand == nil:
 		return "", t.text
 	}

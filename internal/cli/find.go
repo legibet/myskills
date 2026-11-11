@@ -66,7 +66,7 @@ owner/repo@skill, installs, name. Add a result with 'myskills add owner/repo@ski
 			out := findJSON{Results: []findResultJSON{}}
 			for _, r := range results {
 				fr := findResultJSON{Source: r.Source, SkillID: r.SkillID, Name: r.Name, Installs: r.Installs}
-				if sk, ok := core.Installed(lib, "https://github.com/"+r.Source+".git", r.SkillID); ok {
+				if sk, ok := core.Installed(lib, r.Spec().URL, r.SkillID); ok {
 					fr.InLibrary = sk.Path
 				}
 				out.Results = append(out.Results, fr)

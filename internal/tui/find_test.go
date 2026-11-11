@@ -140,6 +140,20 @@ func TestFindMarksInstalledResults(t *testing.T) {
 	}
 }
 
+func TestFindMarksConflictingResults(t *testing.T) {
+	f := libraryFixture()
+	f.lib = append(f.lib, core.Skill{Path: "review", Name: "review", Dir: "/lib/review", Record: gitRecord("https://github.com/other/review.git")})
+	h := findHarness(t, f)
+	h.typeText("review")
+	h.fire()
+	h.contains("✗ conflict")
+	h.press("enter", "space")
+	h.contains("The library already has review from another source under this name")
+	if len(f.called("Fetch")) != 0 || h.a.modal != nil {
+		t.Fatal("a conflicting result should not be fetched")
+	}
+}
+
 func TestFindBrowsesSource(t *testing.T) {
 	f := libraryFixture()
 	spec, _ := source.Parse("acme/skills")
