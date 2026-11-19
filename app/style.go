@@ -329,13 +329,14 @@ func (g *rowGroup) row(c *ui.Context) ui.Element {
 	return e
 }
 
-// rowText is a row's title over its detail, which take the room left.
+// rowText is a row's title over its detail, which take the room left. The
+// detail is cut in the middle, so that both ends of a path show.
 func rowText(c *ui.Context, title, detail string) {
 	p := colors(c)
 	ui.Column(c).Grow(1).Shrink(1).MinWidth(0).Gap(2).Children(func() {
 		ui.Text(c, title).FontWeight(600).SingleLine()
 		if detail != "" {
-			ui.Text(c, detail).FontSize(textSmall(c)).TextColor(p.text2).SingleLine()
+			ui.Text(c, detail).FontSize(textSmall(c)).TextColor(p.text2).SingleLine().TruncateMiddle()
 		}
 	})
 }
@@ -402,12 +403,15 @@ func sourceList(c *ui.Context, s *ui.ListState, n int, label string, row func(i 
 }
 
 // listRow is a row of a source list: a title line and a detail line, the
-// detail in white on the accent.
-func listRow(c *ui.Context, onAccent bool, title func(), detail string) {
+// detail in white on the accent. It returns the detail, which a caller cuts
+// in the middle when it ends with what matters, as a path does.
+func listRow(c *ui.Context, onAccent bool, title func(), detail string) ui.Element {
+	var text ui.Element
 	ui.Column(c).MinHeight(50).Justify(ui.Center).Padding(6, 10).Gap(3).Children(func() {
 		ui.Row(c).Gap(6).AlignItems(ui.Center).MinWidth(0).Children(title)
-		ui.Text(c, detail).FontSize(textSmall(c)).TextColor(rowSub(c, onAccent)).SingleLine()
+		text = ui.Text(c, detail).FontSize(textSmall(c)).TextColor(rowSub(c, onAccent)).SingleLine()
 	})
+	return text
 }
 
 // rowSub is the color of a list row's secondary text.

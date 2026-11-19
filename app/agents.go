@@ -73,7 +73,7 @@ func (a *app) agentRow(c *ui.Context, g *rowGroup, ag agent.Agent) {
 						ui.Text(c, "None").FontSize(textSmall(c)).TextColor(pal.text3)
 						return
 					}
-					ui.Text(c, path).FontSize(textSmall(c)).Font("monospace").SingleLine().Selectable()
+					ui.Text(c, path).FontSize(textSmall(c)).Font("monospace").SingleLine().TruncateMiddle().Shrink(1).MinWidth(0).Selectable()
 				})
 			}
 			dir("Project", ag.Project)

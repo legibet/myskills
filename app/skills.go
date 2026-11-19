@@ -132,7 +132,7 @@ func (a *app) skillRow(c *ui.Context, sk core.Skill, onAccent bool) {
 		for _, b := range a.badges(sk) {
 			rowTag(c, b.text, b.color(t), onAccent)
 		}
-	}, core.Tilde(sk.SourceLabel())+" · "+a.where(sk.Path))
+	}, core.Tilde(sk.SourceLabel())+" · "+a.where(sk.Path)).TruncateMiddle()
 }
 
 // skillDetail is the skill chosen: what it is, where it is enabled, and its

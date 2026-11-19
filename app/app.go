@@ -446,7 +446,7 @@ func (a *app) view(c *ui.Context) {
 		}
 	}
 	if c.Shortcut(ui.Cmd, ui.KeyF) {
-		a.searchField.Focus(c)
+		a.searchField.SelectAll(c)
 	}
 	ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() {
 		side := ui.Column(c).Width(sidebarWidth).Shrink(0)
@@ -565,7 +565,11 @@ func webLink(c *ui.Context, label, url string) {
 }
 
 // metaText is a part of a detail's meta line; dot separates the parts.
-func metaText(c *ui.Context, s string) { ui.Text(c, s).SingleLine().Selectable() }
+// The parts are paths and sources, cut in the middle when the line is too
+// narrow, so that both ends show.
+func metaText(c *ui.Context, s string) {
+	ui.Text(c, s).SingleLine().TruncateMiddle().Shrink(1).MinWidth(0).Selectable()
+}
 
 func dot(c *ui.Context) { ui.Text(c, "·").TextColor(colors(c).text3) }
 

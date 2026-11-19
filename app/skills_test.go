@@ -88,6 +88,12 @@ func TestFilterAndSearch(t *testing.T) {
 	h.settle()
 	h.want("tdd")
 	h.wantNo("review")
+
+	// ⌘F selects the query, so typing replaces it.
+	h.tt.Key(ui.Cmd, ui.KeyF)
+	h.typeText("rev")
+	h.want("review")
+	h.wantNo("tdd")
 }
 
 func TestDisableCopyAsks(t *testing.T) {

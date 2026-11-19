@@ -99,10 +99,10 @@ func (h *harness) github() {
 	writeFile(h.t, filepath.Join(h.home, ".gitconfig"), "[url \""+url+"\"]\n\tinsteadOf = https://github.com/acme/skills.git\n")
 }
 
-// query focuses the field with ⌘F and replaces the query with s.
+// query replaces the query with s: ⌘F focuses the field and selects its
+// text.
 func (h *harness) query(s string) {
 	h.tt.Key(ui.Cmd, ui.KeyF)
-	h.tt.Key(ui.Cmd, ui.KeyA)
 	h.typeText(s)
 }
 

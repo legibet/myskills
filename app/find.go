@@ -568,7 +568,7 @@ func (a *app) sourceBar(c *ui.Context) {
 		ui.Icon(c, icon).Size(15, 15).Shrink(0).TextColor(pal.text2)
 		ui.Column(c).Grow(1).MinWidth(0).Gap(2).Children(func() {
 			ui.Text(c, sourceName(spec)).FontSize(textSmall(c)).FontWeight(600).SingleLine()
-			ui.Text(c, sub).FontSize(textCaption(c)).TextColor(pal.text2).SingleLine()
+			ui.Text(c, sub).FontSize(textCaption(c)).TextColor(pal.text2).SingleLine().TruncateMiddle()
 		})
 		key := "link:" + spec.Path
 		switch {
@@ -597,9 +597,12 @@ func (a *app) findRowView(c *ui.Context, r findRow, onAccent bool) {
 	}
 	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
 		ui.Column(c).Grow(1).MinWidth(0).Children(func() {
-			listRow(c, onAccent, func() {
+			detail := listRow(c, onAccent, func() {
 				ui.Text(c, r.name()).FontWeight(600).SingleLine().Grow(1).Shrink(1).MinWidth(0)
 			}, from)
+			if r.res != nil || r.cand.Description == "" {
+				detail.TruncateMiddle() // a source or a folder; a description is cut at its end
+			}
 		})
 		ui.Row(c).Shrink(0).Padding(0, 10, 0, 0).Children(func() {
 			if a.working(c, r.key()) {

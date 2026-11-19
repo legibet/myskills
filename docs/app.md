@@ -12,11 +12,12 @@
 
 ## Window
 
-- One window: a sidebar with Skills, Projects, Find and Agents beside the page; `⌘1`–`⌘4` choose a page and `⌘F` focuses its search field. On macOS the title bar is hidden and the window controls sit over the sidebar, which shows the sidebar material.
+- One window: a sidebar with Skills, Projects, Find and Agents beside the page; `⌘1`–`⌘4` choose a page and `⌘F` focuses its search field and selects its query, so typing replaces it. On macOS the title bar is hidden and the window controls sit over the sidebar, which shows the sidebar material.
 - Skills' sidebar badge counts the updates the last check found; Projects' counts the places that need attention (outdated or modified copies, broken links).
 - A page is a list beside a detail; Agents is one column. The list's bar, as tall as the title bar, names the page with a count line and holds the page's actions. The detail's bar holds the actions on what it shows: icon buttons with tooltips, then the primary action. Groups of rows are cards with hairline separators, and menus are native.
 - The list's selection is the accent while the list has the keyboard, and gray otherwise, in place of a focus ring. In an inactive window, the accent of selections, the primary action and the chosen page's icon fades to gray, as in native apps.
 - Light and dark mode, and the accent, follow the system. Text sizes are steps from the system's body size times the desktop's text scale (GNOME's and Windows's text size), and controls and rows grow with their text.
+- A path too long for its line is cut in the middle, so that its start and its end, which name the folder, both show. Descriptions are cut at their end.
 
 ## Data
 

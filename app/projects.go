@@ -76,7 +76,7 @@ func (a *app) placeRow(c *ui.Context, p *place, onAccent bool) {
 		if k := p.attention(); k > 0 {
 			rowTag(c, strconv.Itoa(k), c.Theme().Warning, onAccent).Tooltip(fmt.Sprintf("%d %s attention", k, plural(k, "skill needs", "skills need")))
 		}
-	}, fmt.Sprintf("%d %s · %s", n, plural(n, "skill", "skills"), where))
+	}, fmt.Sprintf("%d %s · %s", n, plural(n, "skill", "skills"), where)).TruncateMiddle()
 }
 
 // placeDetail is the place chosen: its skills, its broken links and the
@@ -234,7 +234,7 @@ func (a *app) addSkillsView(c *ui.Context) {
 						ui.Column(c.Key(sk.Path)).Padding(7, 14).Gap(2).Children(func() {
 							box := ui.Checkbox(c, &on, sk.Name)
 							if dir := a.data.skillDir(sk); dir != "" {
-								box.Children(func() { ui.Text(c, dir).TextColor(pal.text2).SingleLine().Shrink(1).MinWidth(0) })
+								box.Children(func() { ui.Text(c, dir).TextColor(pal.text2).SingleLine().TruncateMiddle().Shrink(1).MinWidth(0) })
 							}
 							if box.Changed() {
 								d.picks[sk.Path] = on

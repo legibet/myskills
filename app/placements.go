@@ -99,7 +99,7 @@ func (a *app) agentsChip(c *ui.Context, p *place, sk core.Skill, e *core.Enablem
 							a.disable(p.scope, sk, e, d.Agents)
 						}
 					}
-					ui.Text(c, core.Tilde(d.Path)).FontSize(textCaption(c)).TextColor(pal.text2).Margin(0, 0, 0, 26).SingleLine()
+					ui.Text(c, core.Tilde(d.Path)).FontSize(textCaption(c)).TextColor(pal.text2).Margin(0, 0, 0, 26).SingleLine().TruncateMiddle()
 				})
 			}
 		})
